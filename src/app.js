@@ -245,6 +245,7 @@ function initAuth() {
   renderPasswordSetupFields();
 
   document.getElementById("loginForm").addEventListener("submit", handleLogin);
+  document.getElementById("togglePasswordBtn")?.addEventListener("click", togglePasswordVisibility);
   document.getElementById("setupForm")?.addEventListener("submit", handlePasswordSetup);
   document.getElementById("logoutBtn").addEventListener("click", logout);
 
@@ -273,8 +274,7 @@ async function handlePasswordSetup(event) {
   for (const [user] of LOGIN_USERS) {
     const password = form.elements[user].value;
     if (password.length < 4) return;
-    const salt = crypto.getRandomValues(new Uint32Array(4)).join("-");
-    auth[user] = { salt, hash: await hashPassword(salt, password) };
+    auth[user] = await createPasswordRecord(password);
   }
   localStorage.setItem(authKey, JSON.stringify(auth));
   localStorage.setItem(sessionKey, "abi");
@@ -289,9 +289,17 @@ async function handleLogin(event) {
   const user = document.getElementById("loginUser").value;
   const password = document.getElementById("loginPassword").value;
   const status = document.getElementById("loginStatus");
-  const auth = loadAuth();
+  const auth = loadAuth() || {};
   if (!auth || !auth[user]) {
-    status.textContent = "Password keluarga belum dibuat atau belum tersedia di perangkat ini. Setup password tersedia di menu Pengaturan Kepala Keluarga (Abi).";
+    if (password.length < 4) {
+      status.textContent = "Password minimal 4 karakter.";
+      return;
+    }
+    auth[user] = await createPasswordRecord(password);
+    localStorage.setItem(authKey, JSON.stringify(auth));
+    localStorage.setItem(sessionKey, user);
+    status.textContent = "Password user ini disimpan di perangkat ini. Membuka dashboard...";
+    unlockApp(user);
     return;
   }
   const hash = await hashPassword(auth[user].salt, password);
@@ -301,6 +309,17 @@ async function handleLogin(event) {
   }
   localStorage.setItem(sessionKey, user);
   unlockApp(user);
+}
+
+function togglePasswordVisibility() {
+  const input = document.getElementById("loginPassword");
+  const button = document.getElementById("togglePasswordBtn");
+  const visible = input.type === "text";
+  input.type = visible ? "password" : "text";
+  button.textContent = visible ? "Lihat" : "Sembunyi";
+  button.setAttribute("aria-label", visible ? "Tampilkan password" : "Sembunyikan password");
+  button.title = visible ? "Tampilkan password" : "Sembunyikan password";
+  input.focus();
 }
 
 function unlockApp(user) {
@@ -347,6 +366,11 @@ async function hashPassword(salt, password) {
   const bytes = new TextEncoder().encode(`${salt}:${password}`);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function createPasswordRecord(password) {
+  const salt = crypto.getRandomValues(new Uint32Array(4)).join("-");
+  return { salt, hash: await hashPassword(salt, password) };
 }
 
 function renderNav(role = document.getElementById("roleSelect")?.value || "abi") {

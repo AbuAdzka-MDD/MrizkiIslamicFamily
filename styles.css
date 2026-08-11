@@ -711,6 +711,32 @@ input, select, textarea {
   min-height: 41px;
 }
 
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.password-field input {
+  padding-right: 92px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 8px;
+  min-width: 72px;
+  min-height: 30px;
+  padding: 0 10px;
+  background: #eef2fb;
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
 textarea { min-height: 88px; resize: vertical; }
 .wide { grid-column: 1 / -1; }
 
