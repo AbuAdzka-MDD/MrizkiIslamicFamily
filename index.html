@@ -3,9 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store, max-age=0">
   <title>The Family of Muhammad Rizki | Islamic Family Growth Dashboard</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=27dd849">
+  <link rel="stylesheet" href="styles.css?v=8f83949">
   <script src="config.js"></script>
 </head>
 <body class="auth-locked">
@@ -17,7 +18,15 @@
 
       <form id="loginForm" class="login-form">
         <label>Pengguna
-          <select id="loginUser"></select>
+          <select id="loginUser">
+            <option value="abi">Kepala Keluarga (Abi)</option>
+            <option value="ummi">Istri (Ummi)</option>
+            <option value="alif_aslam">Alif Aslam (Anak Pertama)</option>
+            <option value="muslim_ihsan">Muslim Ihsan (Anak Kedua)</option>
+            <option value="m_bilal_albana">M. Bilal Albana (Anak Ketiga)</option>
+            <option value="fajri_rahman">Fajri Rahman (Anak Keempat)</option>
+            <option value="adzkadina_salsabila">Adzkadina Salsabila (Anak Kelima)</option>
+          </select>
         </label>
         <label>Password
           <input id="loginPassword" type="password" autocomplete="current-password" required>
@@ -185,6 +194,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="src/app.js?v=27dd849"></script>
+  <script type="module" src="src/app.js?v=8f83949"></script>
 </body>
 </html>
