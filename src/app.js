@@ -240,45 +240,28 @@ function init() {
 function initAuth() {
   const loginUser = document.getElementById("loginUser");
   loginUser.innerHTML = LOGIN_USERS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
-  document.getElementById("setupFields").innerHTML = LOGIN_USERS.map(([value, label]) => `
-    <label>${label}
-      <input name="${value}" type="password" autocomplete="new-password" minlength="4" required placeholder="Minimal 4 karakter">
-    </label>`).join("");
+  renderPasswordSetupFields();
 
   document.getElementById("loginForm").addEventListener("submit", handleLogin);
-  document.getElementById("setupForm").addEventListener("submit", handlePasswordSetup);
-  document.getElementById("showSetupBtn").addEventListener("click", showAbiSetup);
-  loginUser.addEventListener("change", updateSetupAccess);
+  document.getElementById("setupForm")?.addEventListener("submit", handlePasswordSetup);
   document.getElementById("logoutBtn").addEventListener("click", logout);
 
   const auth = loadAuth();
   const session = localStorage.getItem(sessionKey);
   if (!auth) {
     document.getElementById("loginForm").hidden = false;
-    document.getElementById("setupForm").hidden = true;
-    updateSetupAccess();
     return;
   }
   if (session && auth[session]) unlockApp(session);
 }
 
-function updateSetupAccess() {
-  const auth = loadAuth();
-  const selectedUser = document.getElementById("loginUser").value;
-  const setupButton = document.getElementById("showSetupBtn");
-  const status = document.getElementById("loginStatus");
-  setupButton.hidden = Boolean(auth) || selectedUser !== "abi";
-  if (!auth && selectedUser !== "abi") {
-    status.textContent = "Password keluarga belum dibuat. Setup hanya dapat dilakukan oleh Kepala Keluarga (Abi).";
-  } else if (!auth) {
-    status.textContent = "Setup password keluarga hanya tersedia untuk Kepala Keluarga (Abi).";
-  }
-}
-
-function showAbiSetup() {
-  if (document.getElementById("loginUser").value !== "abi") return;
-  document.getElementById("loginForm").hidden = true;
-  document.getElementById("setupForm").hidden = false;
+function renderPasswordSetupFields() {
+  const setupFields = document.getElementById("setupFields");
+  if (!setupFields) return;
+  setupFields.innerHTML = LOGIN_USERS.map(([value, label]) => `
+    <label>${label}
+      <input name="${value}" type="password" autocomplete="new-password" minlength="4" required placeholder="Minimal 4 karakter">
+    </label>`).join("");
 }
 
 async function handlePasswordSetup(event) {
@@ -293,6 +276,9 @@ async function handlePasswordSetup(event) {
   }
   localStorage.setItem(authKey, JSON.stringify(auth));
   localStorage.setItem(sessionKey, "abi");
+  const status = form.querySelector(".status-line");
+  if (status) status.textContent = "Password keluarga berhasil disimpan. Gunakan password baru saat login berikutnya.";
+  form.reset();
   unlockApp("abi");
 }
 
@@ -303,9 +289,7 @@ async function handleLogin(event) {
   const status = document.getElementById("loginStatus");
   const auth = loadAuth();
   if (!auth || !auth[user]) {
-    status.textContent = user === "abi"
-      ? "Password keluarga belum dibuat. Gunakan tombol setup khusus Abi."
-      : "Password keluarga belum dibuat. Minta Kepala Keluarga (Abi) melakukan setup terlebih dahulu.";
+    status.textContent = "Password keluarga belum dibuat atau belum tersedia di perangkat ini. Setup password tersedia di menu Pengaturan Kepala Keluarga (Abi).";
     return;
   }
   const hash = await hashPassword(auth[user].salt, password);
@@ -337,17 +321,19 @@ function logout() {
   document.getElementById("loginPassword").value = "";
   document.getElementById("loginStatus").textContent = "";
   document.getElementById("loginForm").hidden = false;
-  document.getElementById("setupForm").hidden = true;
-  updateSetupAccess();
 }
 
 function resetPasswords() {
-  if (!confirm("Reset password keluarga di perangkat ini? Setelah itu setup password akan muncul kembali.")) return;
+  if (!confirm("Reset password keluarga di perangkat ini? Setelah itu Abi perlu mengisi ulang password dari menu Pengaturan.")) return;
   localStorage.removeItem(authKey);
   localStorage.removeItem(sessionKey);
-  document.getElementById("loginForm").hidden = true;
-  document.getElementById("setupForm").hidden = false;
-  logout();
+  const setupForm = document.getElementById("setupForm");
+  if (setupForm) {
+    setupForm.reset();
+    setupForm.querySelector(".status-line").textContent = "Password lama sudah dihapus. Isi ulang semua password keluarga lalu simpan.";
+  } else {
+    logout();
+  }
 }
 
 function loadAuth() {
@@ -543,6 +529,12 @@ function settingsTemplate() {
         </div>
         <p class="status-line">Tidak ada password, token, client secret, atau API key di source code.</p>
       </div>
+      <form class="panel" id="setupForm">
+        <h3>Setup Password Keluarga</h3>
+        <div id="setupFields" class="setup-fields"></div>
+        <button class="btn primary" type="submit">Simpan Password Keluarga</button>
+        <p class="status-line">Menu ini hanya tersedia untuk Kepala Keluarga (Abi) melalui Pengaturan.</p>
+      </form>
     </div>`;
 }
 

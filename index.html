@@ -14,7 +14,6 @@
       <img class="login-logo" src="assets/logo/abu-adzka-logo.png" alt="Abu Adzka logo">
       <p class="kicker">The Family of Muhammad Rizki</p>
       <h1>Islamic Family Growth Dashboard</h1>
-      <p class="tagline">Masuk dengan akun keluarga. Password dibuat pada setup awal dan disimpan sebagai hash lokal atau dapat disambungkan ke Google Workspace.</p>
 
       <form id="loginForm" class="login-form">
         <label>Pengguna
@@ -24,15 +23,7 @@
           <input id="loginPassword" type="password" autocomplete="current-password" required>
         </label>
         <button class="btn primary" type="submit">Masuk Dashboard</button>
-        <button class="btn" id="showSetupBtn" type="button" hidden>Setup Password Keluarga (Abi)</button>
         <p class="status-line" id="loginStatus"></p>
-      </form>
-
-      <form id="setupForm" class="login-form" hidden>
-        <h3>Setup Password Keluarga</h3>
-        <div id="setupFields" class="setup-fields"></div>
-        <button class="btn primary" type="submit">Simpan Password dan Masuk</button>
-        <p class="status-line">Password tidak ditulis di source code. Yang disimpan hanya hash di browser demo.</p>
       </form>
     </div>
   </section>
