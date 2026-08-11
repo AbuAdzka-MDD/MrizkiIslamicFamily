@@ -63,6 +63,16 @@ Lalu buka:
 http://127.0.0.1:8770/
 ```
 
+## URL Aplikasi Online
+
+Setelah GitHub Pages aktif, aplikasi dapat dibuka di:
+
+```text
+https://abuadzka-mdd.github.io/MrizkiIslamicFamily/
+```
+
+Workflow deploy tersedia di `.github/workflows/deploy-pages.yml`.
+
 ## Mengaktifkan Google Workspace Backend
 
 1. Login dengan akun `mrizki.markazdigital@gmail.com`.
