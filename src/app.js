@@ -14,10 +14,14 @@ const storageKey = `${config.familyId}:data:v3`;
 const queueKey = `${config.familyId}:offlineQueue:v3`;
 const authKey = `${config.familyId}:auth:v1`;
 const sessionKey = `${config.familyId}:session:v1`;
+const quranCacheKey = `${config.familyId}:quranCache:v1`;
+const prayerLocationKey = `${config.familyId}:prayerLocation:v1`;
 let state = loadData();
 let queue = loadQueue();
 let editing = null;
 let deferredInstall = null;
+let prayerState = loadPrayerState();
+let quranAudio = null;
 
 const LOGIN_USERS = [
   ["abi", "Kepala Keluarga (Abi)"],
@@ -62,36 +66,25 @@ const PRAYER_TIMES = [
   ["Isya", "19:08"]
 ];
 
-const QURAN_SURAHS = [
-  "Al-Fatihah", "Al-Baqarah", "Ali 'Imran", "An-Nisa", "Al-Ma'idah", "Al-An'am", "Al-A'raf", "Al-Anfal", "At-Taubah", "Yunus", "Hud", "Yusuf", "Ar-Ra'd", "Ibrahim", "Al-Hijr", "An-Nahl", "Al-Isra", "Al-Kahf", "Maryam", "Taha", "Al-Anbiya", "Al-Hajj", "Al-Mu'minun", "An-Nur", "Al-Furqan", "Ash-Shu'ara", "An-Naml", "Al-Qasas", "Al-'Ankabut", "Ar-Rum", "Luqman", "As-Sajdah", "Al-Ahzab", "Saba", "Fatir", "Ya-Sin", "As-Saffat", "Sad", "Az-Zumar", "Gafir", "Fussilat", "Ash-Shura", "Az-Zukhruf", "Ad-Dukhan", "Al-Jasiyah", "Al-Ahqaf", "Muhammad", "Al-Fath", "Al-Hujurat", "Qaf", "Az-Zariyat", "At-Tur", "An-Najm", "Al-Qamar", "Ar-Rahman", "Al-Waqi'ah", "Al-Hadid", "Al-Mujadilah", "Al-Hashr", "Al-Mumtahanah", "As-Saff", "Al-Jumu'ah", "Al-Munafiqun", "At-Tagabun", "At-Talaq", "At-Tahrim", "Al-Mulk", "Al-Qalam", "Al-Haqqah", "Al-Ma'arij", "Nuh", "Al-Jinn", "Al-Muzzammil", "Al-Muddassir", "Al-Qiyamah", "Al-Insan", "Al-Mursalat", "An-Naba", "An-Nazi'at", "'Abasa", "At-Takwir", "Al-Infitar", "Al-Mutaffifin", "Al-Insyiqaq", "Al-Buruj", "At-Tariq", "Al-A'la", "Al-Gasyiyah", "Al-Fajr", "Al-Balad", "Ash-Shams", "Al-Lail", "Ad-Duha", "Ash-Sharh", "At-Tin", "Al-'Alaq", "Al-Qadr", "Al-Bayyinah", "Az-Zalzalah", "Al-'Adiyat", "Al-Qari'ah", "At-Takasur", "Al-'Asr", "Al-Humazah", "Al-Fil", "Quraisy", "Al-Ma'un", "Al-Kausar", "Al-Kafirun", "An-Nasr", "Al-Lahab", "Al-Ikhlas", "Al-Falaq", "An-Nas"
+const PRAYER_API_NAMES = {
+  Fajr: "Subuh",
+  Sunrise: "Syuruq",
+  Dhuhr: "Zuhur",
+  Asr: "Asar",
+  Maghrib: "Magrib",
+  Isha: "Isya"
+};
+
+const QURAN_QARIS = [
+  ["ar.alafasy", "Mishary Rashid Alafasy"],
+  ["ar.abdulbasitmurattal", "Abdul Basit Murattal"],
+  ["ar.hanirifai", "Hani Ar-Rifai"],
+  ["ar.husary", "Mahmoud Khalil Al-Husary"],
+  ["ar.minshawi", "Mohamed Siddiq Al-Minshawi"]
 ];
 
-const QURAN_SAMPLE = [
-  {
-    ayah: 1,
-    arabic: `<span class="tajwid mad">بِسْمِ</span> اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ`,
-    translation: "Dengan nama Allah Yang Maha Pengasih, Maha Penyayang."
-  },
-  {
-    ayah: 2,
-    arabic: `الْحَمْدُ لِلَّهِ <span class="tajwid ikhfa">رَبِّ</span> الْعَالَمِينَ`,
-    translation: "Segala puji bagi Allah, Tuhan seluruh alam."
-  },
-  {
-    ayah: 3,
-    arabic: `الرَّحْمَٰنِ الرَّحِيمِ`,
-    translation: "Yang Maha Pengasih, Maha Penyayang."
-  },
-  {
-    ayah: 4,
-    arabic: `مَالِكِ يَوْمِ الدِّينِ`,
-    translation: "Pemilik hari pembalasan."
-  },
-  {
-    ayah: 5,
-    arabic: `إِيَّاكَ نَعْبُدُ <span class="tajwid qalqalah">وَإِيَّاكَ</span> نَسْتَعِينُ`,
-    translation: "Hanya kepada Engkaulah kami menyembah dan hanya kepada Engkaulah kami mohon pertolongan."
-  }
+const QURAN_SURAHS = [
+  "Al-Fatihah", "Al-Baqarah", "Ali 'Imran", "An-Nisa", "Al-Ma'idah", "Al-An'am", "Al-A'raf", "Al-Anfal", "At-Taubah", "Yunus", "Hud", "Yusuf", "Ar-Ra'd", "Ibrahim", "Al-Hijr", "An-Nahl", "Al-Isra", "Al-Kahf", "Maryam", "Taha", "Al-Anbiya", "Al-Hajj", "Al-Mu'minun", "An-Nur", "Al-Furqan", "Ash-Shu'ara", "An-Naml", "Al-Qasas", "Al-'Ankabut", "Ar-Rum", "Luqman", "As-Sajdah", "Al-Ahzab", "Saba", "Fatir", "Ya-Sin", "As-Saffat", "Sad", "Az-Zumar", "Gafir", "Fussilat", "Ash-Shura", "Az-Zukhruf", "Ad-Dukhan", "Al-Jasiyah", "Al-Ahqaf", "Muhammad", "Al-Fath", "Al-Hujurat", "Qaf", "Az-Zariyat", "At-Tur", "An-Najm", "Al-Qamar", "Ar-Rahman", "Al-Waqi'ah", "Al-Hadid", "Al-Mujadilah", "Al-Hashr", "Al-Mumtahanah", "As-Saff", "Al-Jumu'ah", "Al-Munafiqun", "At-Tagabun", "At-Talaq", "At-Tahrim", "Al-Mulk", "Al-Qalam", "Al-Haqqah", "Al-Ma'arij", "Nuh", "Al-Jinn", "Al-Muzzammil", "Al-Muddassir", "Al-Qiyamah", "Al-Insan", "Al-Mursalat", "An-Naba", "An-Nazi'at", "'Abasa", "At-Takwir", "Al-Infitar", "Al-Mutaffifin", "Al-Insyiqaq", "Al-Buruj", "At-Tariq", "Al-A'la", "Al-Gasyiyah", "Al-Fajr", "Al-Balad", "Ash-Shams", "Al-Lail", "Ad-Duha", "Ash-Sharh", "At-Tin", "Al-'Alaq", "Al-Qadr", "Al-Bayyinah", "Az-Zalzalah", "Al-'Adiyat", "Al-Qari'ah", "At-Takasur", "Al-'Asr", "Al-Humazah", "Al-Fil", "Quraisy", "Al-Ma'un", "Al-Kausar", "Al-Kafirun", "An-Nasr", "Al-Lahab", "Al-Ikhlas", "Al-Falaq", "An-Nas"
 ];
 
 const sheetForms = {
@@ -235,6 +228,7 @@ function init() {
   buildViews();
   bindTopActions();
   initAuth();
+  initPrayerLocation();
   tickIslamicWidget();
   setInterval(tickIslamicWidget, 1000);
   renderAll();
@@ -421,6 +415,9 @@ function enhanceQuranView() {
       <h3>Al-Qur'an Digital 30 Juz</h3>
       <div class="quran-reader">
         <div class="glass-3d">
+          <label>Tampilkan
+            <select id="quranMode"><option value="juz">Juz lengkap</option><option value="surah">Surah</option></select>
+          </label>
           <label>Juz
             <select id="quranJuz">${Array.from({ length: 30 }, (_, i) => `<option value="${i + 1}">Juz ${i + 1}</option>`).join("")}</select>
           </label>
@@ -428,25 +425,38 @@ function enhanceQuranView() {
             <select id="quranSurah">${QURAN_SURAHS.map((name, index) => `<option value="${index + 1}">${index + 1}. ${name}</option>`).join("")}</select>
           </label>
           <label>Qari
-            <select id="quranQari"><option>Mishary Rashid Alafasy</option><option>Abdul Basit</option><option>Hani Ar-Rifai</option></select>
+            <select id="quranQari">${QURAN_QARIS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select>
           </label>
           <label>Ukuran Arab
             <select id="arabicSize"><option value="normal">Normal</option><option value="large">Besar</option><option value="xlarge">Sangat besar</option></select>
           </label>
+          <div class="form-actions quran-actions">
+            <button class="btn small primary" type="button" id="loadQuranBtn">Muat Bacaan</button>
+            <button class="btn small" type="button" id="playQuranBtn">Putar Audio</button>
+            <button class="btn small" type="button" id="stopQuranBtn">Stop</button>
+          </div>
           <div class="tajwid-legend">
             <span class="pill"><span class="tajwid mad">Mad</span></span>
             <span class="pill"><span class="tajwid ikhfa">Ikhfa</span></span>
             <span class="pill"><span class="tajwid idgham">Idgham</span></span>
             <span class="pill"><span class="tajwid qalqalah">Qalqalah</span></span>
           </div>
+          <p class="status-line" id="quranStatus">Pilih juz atau surah, lalu muat bacaan.</p>
         </div>
         <div class="mushaf-panel" id="mushafPanel"></div>
       </div>
-      <p class="status-line">Mode demo menampilkan contoh bacaan dengan tajwid berwarna. Untuk mushaf lengkap 30 juz, hubungkan API Al-Qur'an resmi dan font/audio berlisensi melalui konfigurasi produksi.</p>
+      <p class="status-line">Data mushaf mengambil 30 juz, terjemahan Indonesia, dan audio qari melalui API AlQuran Cloud. Cache browser dipakai agar bacaan yang pernah dibuka tetap tersedia saat offline.</p>
     </div>`);
-  ["quranJuz", "quranSurah", "quranQari", "arabicSize"].forEach(id => {
+  ["quranMode", "quranJuz", "quranSurah", "quranQari", "arabicSize"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("change", renderQuranReader);
+  });
+  document.getElementById("loadQuranBtn")?.addEventListener("click", () => renderQuranReader(true));
+  document.getElementById("playQuranBtn")?.addEventListener("click", playVisibleQuranAudio);
+  document.getElementById("stopQuranBtn")?.addEventListener("click", stopQuranAudio);
+  document.getElementById("mushafPanel")?.addEventListener("click", event => {
+    const button = event.target.closest("[data-play-ayah]");
+    if (button) playAyah(button.dataset.playAyah);
   });
 }
 
@@ -456,16 +466,21 @@ function enhancePrayerView() {
     <div class="grid two" style="margin-bottom:16px">
       <div class="panel">
         <h3>Jadwal Salat dan Adzan</h3>
+        <div class="table-tools">
+          <button class="btn small primary" type="button" id="useLocationBtn">Gunakan Lokasi Saya</button>
+          <span class="pill" id="prayerLocationLabel">Memuat lokasi...</span>
+        </div>
         <div class="prayer-grid" id="prayerGrid"></div>
       </div>
       <div class="panel">
         <h3>Arah Kiblat</h3>
         <div class="qibla-card glass-3d">
-          <div class="compass-3d"><span>N</span><i></i><b>295°</b></div>
-          <p class="status-line">Demo memakai arah 295° dari utara untuk Jakarta. Produksi dapat memakai GPS dan sensor kompas perangkat.</p>
+          <div class="compass-3d"><span>N</span><i></i><b>295&deg;</b></div>
+          <p class="status-line">Arah kiblat akan disesuaikan otomatis setelah izin lokasi diberikan.</p>
         </div>
       </div>
     </div>`);
+  document.getElementById("useLocationBtn")?.addEventListener("click", initPrayerLocation);
 }
 
 function formTemplate(sheet, meta) {
@@ -689,7 +704,7 @@ function renderReports() {
 function renderTimeline() {
   const rows = [...visibleRows("Daily_Activities"), ...visibleRows("Spiritual_Logs"), ...visibleRows("Quran_Progress")]
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, 8);
-  document.getElementById("recentActivity").innerHTML = rows.length ? rows.map(row => `<li><span class="time">${row.start_time || row.time || row.date || ""}</span><span><strong>${row.activity || row.program_name || row.surah || "Catatan"}</strong><br><span class="muted">${row.member_name || ""} · ${row.status || row.last_read || ""}</span></span></li>`).join("") : "<li>Belum ada aktivitas.</li>";
+  document.getElementById("recentActivity").innerHTML = rows.length ? rows.map(row => `<li><span class="time">${row.start_time || row.time || row.date || ""}</span><span><strong>${row.activity || row.program_name || row.surah || "Catatan"}</strong><br><span class="muted">${row.member_name || ""} - ${row.status || row.last_read || ""}</span></span></li>`).join("") : "<li>Belum ada aktivitas.</li>";
 }
 
 function renderFilters() {
@@ -725,22 +740,24 @@ function tickIslamicWidget() {
   if (prayerName) prayerName.textContent = prayer.name;
   if (prayerCountdown) prayerCountdown.textContent = `Menuju adzan ${prayer.countdown}`;
   const widget = document.getElementById("islamicWidget");
+  const location = prayerState.locationName || coordinateLabel(prayerState.latitude, prayerState.longitude);
   if (widget) widget.innerHTML = [
     ["Tanggal Masehi", date],
     ["Tanggal Hijriah", hijri],
-    ["Lokasi", "Jakarta, Indonesia (demo, dapat disesuaikan)"],
-    ["Metode", "Kementerian Agama RI / Manual"],
-    ["Subuh", "04:39"], ["Syuruq", "05:58"], ["Zuhur", "12:02"], ["Asar", "15:23"], ["Magrib", "17:58"], ["Isya", "19:08"],
-    ["Salat berikutnya", `${prayer.name} · ${prayer.countdown}`],
-    ["Arah kiblat", "295° dari utara (demo)"]
+    ["Lokasi", location],
+    ["Metode", prayerState.methodLabel],
+    ...currentPrayerTimes(),
+    ["Salat berikutnya", `${prayer.name} - ${prayer.countdown}`],
+    ["Arah kiblat", `${Math.round(prayerState.qibla)} derajat dari utara`]
   ].map(row => `<tr><th>${row[0]}</th><td>${row[1]}</td></tr>`).join("");
+  updateQiblaDisplays();
 }
 
 function nextPrayer(now) {
-  const times = PRAYER_TIMES;
+  const times = currentPrayerTimes();
   const current = now.getHours() * 60 + now.getMinutes();
   let found = times.map(([name, time]) => ({ name, mins: Number(time.slice(0, 2)) * 60 + Number(time.slice(3)) })).find(item => item.mins > current);
-  if (!found) found = { name: "Subuh", mins: times[0][1].slice(0, 2) * 60 + Number(times[0][1].slice(3)) + 1440 };
+  if (!found) found = { name: "Subuh", mins: Number(times[0][1].slice(0, 2)) * 60 + Number(times[0][1].slice(3)) + 1440 };
   const diff = found.mins - current;
   return { name: found.name, countdown: `${Math.floor(diff / 60)}j ${diff % 60}m` };
 }
@@ -749,37 +766,149 @@ function renderPrayerGrid() {
   const grid = document.getElementById("prayerGrid");
   if (!grid) return;
   const next = nextPrayer(new Date()).name;
-  grid.innerHTML = PRAYER_TIMES.map(([name, time]) => `
+  grid.innerHTML = currentPrayerTimes().map(([name, time]) => `
     <div class="prayer-tile">
       <span>${name}</span>
       <strong>${time}</strong>
-      <small class="${name === next ? "pill gold" : "muted"}">${name === next ? "Berikutnya" : "Jadwal demo"}</small>
+      <small class="${name === next ? "pill gold" : "muted"}">${name === next ? "Berikutnya" : prayerState.source}</small>
     </div>`).join("");
+  const label = document.getElementById("prayerLocationLabel");
+  if (label) label.textContent = prayerState.locationName || coordinateLabel(prayerState.latitude, prayerState.longitude);
+  updateQiblaDisplays();
 }
-
-function renderQuranReader() {
+function renderQuranReader(force = false) {
   const panel = document.getElementById("mushafPanel");
   if (!panel) return;
-  const surahIndex = Number(document.getElementById("quranSurah")?.value || 1) - 1;
-  const juz = document.getElementById("quranJuz")?.value || "1";
+  const mode = document.getElementById("quranMode")?.value || "juz";
+  const surah = Number(document.getElementById("quranSurah")?.value || 1);
+  const juz = Number(document.getElementById("quranJuz")?.value || 1);
+  const qari = document.getElementById("quranQari")?.value || QURAN_QARIS[0][0];
   const size = document.getElementById("arabicSize")?.value || "normal";
-  const sizeClass = size === "xlarge" ? " style=\"font-size:52px\"" : size === "large" ? " style=\"font-size:44px\"" : "";
+  const cacheKey = `${mode}:${mode === "juz" ? juz : surah}:${qari}`;
+  const cache = loadQuranCache();
+  if (!force && cache[cacheKey]) {
+    renderMushaf(cache[cacheKey], size, "cache offline");
+    return;
+  }
+  panel.innerHTML = `<div class="loading-state">Memuat ${mode === "juz" ? `Juz ${juz}` : `Surah ${QURAN_SURAHS[surah - 1]}`}...</div>`;
+  setQuranStatus("Mengambil mushaf, terjemahan, dan audio qari...");
+  loadQuranSelection(mode, mode === "juz" ? juz : surah, qari)
+    .then(data => {
+      const updated = loadQuranCache();
+      updated[cacheKey] = data;
+      localStorage.setItem(quranCacheKey, JSON.stringify(updated));
+      renderMushaf(data, size, "online");
+    })
+    .catch(error => {
+      if (cache[cacheKey]) {
+        renderMushaf(cache[cacheKey], size, "cache offline");
+        return;
+      }
+      panel.innerHTML = `<div class="loading-state error">Belum bisa memuat mushaf. Periksa koneksi internet, lalu tekan Muat Bacaan.</div>`;
+      setQuranStatus(error.message || "Gagal memuat Al-Quran digital.");
+    });
+}
+
+async function loadQuranSelection(mode, reference, qari) {
+  const baseUrl = "https://api.alquran.cloud/v1";
+  const endpoint = mode === "juz" ? `juz/${reference}` : `surah/${reference}`;
+  const [arabic, translation, audio] = await Promise.all([
+    fetchJson(`${baseUrl}/${endpoint}/quran-uthmani`),
+    fetchJson(`${baseUrl}/${endpoint}/id.indonesian`),
+    fetchJson(`${baseUrl}/${endpoint}/${qari}`).catch(() => ({ data: { ayahs: [] } }))
+  ]);
+  const arabicAyahs = arabic.data.ayahs || [];
+  const translationByNumber = new Map((translation.data.ayahs || []).map(ayah => [ayah.number, ayah.text]));
+  const audioByNumber = new Map((audio.data.ayahs || []).map(ayah => [ayah.number, ayah.audio]));
+  const title = mode === "juz" ? `Juz ${reference}` : `${reference}. ${QURAN_SURAHS[reference - 1]}`;
+  return {
+    mode,
+    reference,
+    qari,
+    title,
+    source: "AlQuran Cloud",
+    ayahs: arabicAyahs.map(ayah => ({
+      number: ayah.number,
+      numberInSurah: ayah.numberInSurah,
+      juz: ayah.juz,
+      surahNumber: ayah.surah?.number,
+      surahName: ayah.surah?.englishName || QURAN_SURAHS[(ayah.surah?.number || 1) - 1],
+      arabic: ayah.text,
+      translation: translationByNumber.get(ayah.number) || "Terjemahan belum tersedia.",
+      audio: audioByNumber.get(ayah.number) || ""
+    }))
+  };
+}
+
+function renderMushaf(data, size, sourceLabel) {
+  const panel = document.getElementById("mushafPanel");
+  if (!panel) return;
+  const sizeClass = size === "xlarge" ? " arabic-xl" : size === "large" ? " arabic-lg" : "";
+  const qariName = QURAN_QARIS.find(([value]) => value === data.qari)?.[1] || "Qari";
+  panel.dataset.audioList = JSON.stringify(data.ayahs.map(ayah => ayah.audio).filter(Boolean));
   panel.innerHTML = `
-    <span class="pill gold">Juz ${juz}</span>
-    <span class="pill">${surahIndex + 1}. ${QURAN_SURAHS[surahIndex]}</span>
-    ${QURAN_SAMPLE.map(row => `
-      <div style="margin-top:18px">
-        <div class="arabic-line"${sizeClass}>${row.arabic} <span class="pill gold">${row.ayah}</span></div>
-        <div class="translation-line">${row.translation}</div>
-      </div>`).join("")}
+    <div class="mushaf-head">
+      <span class="pill gold">${escapeHtml(data.title)}</span>
+      <span class="pill">${data.ayahs.length} ayat</span>
+      <span class="pill green">${escapeHtml(qariName)}</span>
+    </div>
+    ${data.ayahs.map(ayah => `
+      <article class="ayah-card">
+        <div class="ayah-meta">
+          <span>${escapeHtml(ayah.surahName || "Surah")} : ${ayah.numberInSurah}</span>
+          <button class="icon-button mini" type="button" title="Putar ayat" data-play-ayah="${escapeHtml(ayah.audio)}">♪</button>
+        </div>
+        <div class="arabic-line${sizeClass}">${colorizeTajwid(ayah.arabic)} <span class="ayah-number">${ayah.numberInSurah}</span></div>
+        <div class="translation-line">${escapeHtml(ayah.translation)}</div>
+      </article>`).join("")}
     <div class="form-actions" style="justify-content:flex-start; flex-wrap:wrap">
       <button class="btn small" type="button">Bookmark</button>
-      <button class="btn small" type="button">Ulangi Ayat</button>
       <button class="btn small" type="button">Catatan</button>
       <button class="btn small primary" type="button">Simpan Progres</button>
     </div>`;
+  setQuranStatus(`${data.title} siap dibaca dari ${sourceLabel}. Audio: ${qariName}.`);
 }
 
+function colorizeTajwid(text) {
+  return escapeHtml(text)
+    .replace(/([اويآ]{2,}|ٰ)/g, '<span class="tajwid mad">$1</span>')
+    .replace(/([نًٌٍْ])([تثجدذزسشصضطظفقك])/g, '<span class="tajwid ikhfa">$1$2</span>')
+    .replace(/([نًٌٍْ])([يرملون])/g, '<span class="tajwid idgham">$1$2</span>')
+    .replace(/([قطبجد])ْ/g, '<span class="tajwid qalqalah">$1ْ</span>');
+}
+
+function playVisibleQuranAudio() {
+  const panel = document.getElementById("mushafPanel");
+  const list = JSON.parse(panel?.dataset.audioList || "[]");
+  if (!list.length) return setQuranStatus("Muat bacaan terlebih dahulu agar audio tersedia.");
+  playAudioList(list);
+}
+
+function playAyah(url) {
+  if (!url) return setQuranStatus("Audio ayat ini belum tersedia dari qari terpilih.");
+  playAudioList([url]);
+}
+
+function playAudioList(list, index = 0) {
+  stopQuranAudio();
+  quranAudio = new Audio(list[index]);
+  quranAudio.addEventListener("ended", () => {
+    if (list[index + 1]) playAudioList(list, index + 1);
+  }, { once: true });
+  quranAudio.play().catch(() => setQuranStatus("Browser memblokir audio. Tekan tombol Putar Audio sekali lagi."));
+}
+
+function stopQuranAudio() {
+  if (!quranAudio) return;
+  quranAudio.pause();
+  quranAudio.currentTime = 0;
+  quranAudio = null;
+}
+
+function setQuranStatus(message) {
+  const status = document.getElementById("quranStatus");
+  if (status) status.textContent = message;
+}
 function drawCharts() {
   drawProgressChart(document.getElementById("progressChart"));
   drawFinanceChart(document.getElementById("financeChart"));
@@ -925,6 +1054,138 @@ function activeActor() {
 
 function setDefaultDates() {
   document.querySelectorAll('input[type="date"]').forEach(input => { if (!input.value) input.value = new Date().toISOString().slice(0, 10); });
+}
+
+async function initPrayerLocation() {
+  const label = document.getElementById("prayerLocationLabel");
+  if (label) label.textContent = "Meminta izin lokasi...";
+  if (!navigator.geolocation) {
+    await refreshPrayerTimes(prayerState.latitude, prayerState.longitude, "Jakarta, Indonesia");
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    async position => {
+      const { latitude, longitude } = position.coords;
+      await refreshPrayerTimes(latitude, longitude, coordinateLabel(latitude, longitude));
+    },
+    async () => {
+      await refreshPrayerTimes(prayerState.latitude, prayerState.longitude, prayerState.locationName || "Jakarta, Indonesia");
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 1800000 }
+  );
+}
+
+async function refreshPrayerTimes(latitude, longitude, locationName) {
+  const date = new Date();
+  const stamp = `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}`;
+  const url = `https://api.aladhan.com/v1/timings/${stamp}?latitude=${latitude}&longitude=${longitude}&method=20`;
+  try {
+    const response = await fetchJson(url);
+    const timings = response.data.timings || {};
+    prayerState = {
+      latitude,
+      longitude,
+      locationName,
+      methodLabel: response.data.meta?.method?.name || "Kementerian Agama RI",
+      source: "GPS online",
+      qibla: await fetchQibla(latitude, longitude),
+      times: Object.entries(PRAYER_API_NAMES).map(([apiName, localName]) => [localName, cleanPrayerTime(timings[apiName])])
+    };
+  } catch {
+    prayerState = {
+      ...prayerState,
+      latitude,
+      longitude,
+      locationName,
+      source: "Fallback lokal",
+      qibla: calculateQibla(latitude, longitude)
+    };
+  }
+  localStorage.setItem(prayerLocationKey, JSON.stringify(prayerState));
+  tickIslamicWidget();
+  renderPrayerGrid();
+}
+
+async function fetchQibla(latitude, longitude) {
+  try {
+    const response = await fetchJson(`https://api.aladhan.com/v1/qibla/${latitude}/${longitude}`);
+    return Number(response.data.direction) || calculateQibla(latitude, longitude);
+  } catch {
+    return calculateQibla(latitude, longitude);
+  }
+}
+
+function currentPrayerTimes() {
+  return (prayerState.times && prayerState.times.length ? prayerState.times : PRAYER_TIMES)
+    .filter(row => row[1] && /^\d{2}:\d{2}$/.test(row[1]));
+}
+
+function updateQiblaDisplays() {
+  const degree = Math.round(prayerState.qibla);
+  document.querySelectorAll(".compass-3d").forEach(compass => {
+    const needle = compass.querySelector("i");
+    const label = compass.querySelector("b");
+    if (needle) needle.style.transform = `rotate(${degree}deg)`;
+    if (label) label.innerHTML = `${degree}&deg;`;
+  });
+  const status = document.getElementById("qiblaStatus") || document.querySelector("#prayer .qibla-card .status-line");
+  if (status) status.textContent = `Arah kiblat ${degree} derajat dari utara, berdasarkan ${prayerState.locationName || coordinateLabel(prayerState.latitude, prayerState.longitude)}.`;
+}
+
+function cleanPrayerTime(value = "") {
+  const match = String(value).match(/\d{2}:\d{2}/);
+  return match ? match[0] : "";
+}
+
+function coordinateLabel(latitude, longitude) {
+  return `${Number(latitude).toFixed(4)}, ${Number(longitude).toFixed(4)}`;
+}
+
+function calculateQibla(latitude, longitude) {
+  const kaabaLat = 21.422487 * Math.PI / 180;
+  const kaabaLon = 39.826206 * Math.PI / 180;
+  const lat = latitude * Math.PI / 180;
+  const lon = longitude * Math.PI / 180;
+  const y = Math.sin(kaabaLon - lon);
+  const x = Math.cos(lat) * Math.tan(kaabaLat) - Math.sin(lat) * Math.cos(kaabaLon - lon);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function loadPrayerState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(prayerLocationKey) || "null");
+    if (saved?.times?.length) return saved;
+  } catch {}
+  return {
+    latitude: -6.2088,
+    longitude: 106.8456,
+    locationName: "Jakarta, Indonesia",
+    methodLabel: "Kementerian Agama RI",
+    source: "Default Jakarta",
+    qibla: 295,
+    times: PRAYER_TIMES
+  };
+}
+
+function loadQuranCache() {
+  try { return JSON.parse(localStorage.getItem(quranCacheKey) || "{}"); }
+  catch { return {}; }
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+function escapeHtml(value = "") {
+  return String(value).replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  })[char]);
 }
 
 function loadData() {
