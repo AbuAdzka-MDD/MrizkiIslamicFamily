@@ -71,10 +71,8 @@ Setelah GitHub Pages aktif, aplikasi dapat dibuka di:
 https://abuadzka-mdd.github.io/MrizkiIslamicFamily/
 ```
 
-Workflow deploy tersedia di `.github/workflows/deploy-pages.yml`.
-
-Branch `gh-pages` juga sudah disiapkan sebagai fallback source GitHub Pages.
-Jika URL masih 404, buka **Settings > Pages** pada repository, lalu pilih:
+Deployment aktif memakai branch `gh-pages`.
+Jika URL pernah 404, buka **Settings > Pages** pada repository, lalu pastikan:
 
 - Source: **Deploy from a branch**
 - Branch: **gh-pages**

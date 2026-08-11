@@ -58,7 +58,7 @@ URL aplikasi:
 https://abuadzka-mdd.github.io/MrizkiIslamicFamily/
 ```
 
-Catatan: branch `gh-pages` sudah dipush sebagai fallback source Pages. Workflow GitHub Actions juga tersedia, tetapi aktivasi Pages dari repository settings membutuhkan akses admin.
+Catatan: branch `gh-pages` sudah dipush dan berhasil dipakai sebagai source Pages. Workflow deploy custom tidak diperlukan untuk aplikasi statis ini.
 
 ## Backend Google Workspace
 
