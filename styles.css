@@ -12,6 +12,7 @@
   --white: #ffffff;
   --shadow: 0 14px 34px rgba(16, 36, 94, .12);
   --shadow-3d: 0 22px 0 rgba(16, 36, 94, .08), 0 30px 54px rgba(16, 36, 94, .18);
+  --arabic-font: "Noto Naskh Arabic", "Amiri Quran", "KFGQPC Uthmanic Script HAFS", "Scheherazade New", "Traditional Arabic", "Arial", serif;
 }
 
 * { box-sizing: border-box; }
@@ -611,14 +612,25 @@ canvas {
 .arabic-line {
   direction: rtl;
   text-align: right;
-  font-family: "Noto Naskh Arabic", "Traditional Arabic", serif;
+  font-family: var(--arabic-font);
   font-size: clamp(27px, 4vw, 42px);
-  line-height: 2.05;
+  font-weight: 500;
+  line-height: 2.25;
   color: var(--navy);
+  unicode-bidi: isolate;
+  word-spacing: .08em;
 }
 
 .arabic-line.arabic-lg { font-size: 44px; }
 .arabic-line.arabic-xl { font-size: 52px; }
+
+.bismillah-line {
+  text-align: center;
+  color: #7a5a00;
+  padding: 8px 0 12px;
+  border-bottom: 1px dashed rgba(212,175,55,.34);
+  margin-bottom: 10px;
+}
 
 .ayah-number {
   display: inline-grid;
@@ -822,7 +834,7 @@ th {
 .status-line { min-height: 20px; color: var(--muted); font-size: 13px; margin-top: 10px; }
 
 .mobile-bar {
-  display: none;
+  display: none !important;
   position: sticky;
   bottom: 0;
   z-index: 10;
@@ -860,23 +872,62 @@ dialog::backdrop { background: rgba(16,36,94,.4); }
 .dialog-body { display: grid; gap: 12px; }
 
 @media (max-width: 1100px) {
-  .shell { grid-template-columns: 1fr; }
-  .sidebar { position: relative; height: auto; }
-  .nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shell { grid-template-columns: 252px minmax(0, 1fr); }
+  .sidebar { position: sticky; height: 100vh; }
+  .nav { grid-template-columns: 1fr; }
   .metrics, .two, .three, .islamic-command-grid, .smart-art, .quran-reader { grid-template-columns: 1fr 1fr; }
   .filters, .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 720px) {
-  .main { padding: 16px; padding-bottom: 76px; }
+  .shell { grid-template-columns: minmax(118px, 36vw) minmax(0, 1fr); }
+  .sidebar {
+    display: block;
+    padding: 14px 8px;
+  }
+  .brand {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    text-align: center;
+  }
+  .brand-icon {
+    width: 46px;
+    height: 46px;
+    margin: 0 auto;
+  }
+  .brand-icon img {
+    width: 40px;
+    height: 40px;
+  }
+  .brand h1 {
+    font-size: 12px;
+    line-height: 1.15;
+  }
+  .brand p { font-size: 10px; }
+  .role-picker { font-size: 10px; }
+  .role-picker select {
+    min-height: 36px;
+    padding: 6px;
+    font-size: 11px;
+  }
+  .nav button {
+    min-height: 38px;
+    padding: 8px;
+    font-size: 11px;
+    line-height: 1.25;
+  }
+  .main { padding: 14px; }
   .topbar { flex-direction: column; }
   .actions { justify-content: stretch; width: 100%; }
   .btn { flex: 1 1 auto; }
   .metrics, .two, .three, .filters, .form-grid, .islamic-command-grid, .smart-art, .quran-reader, .prayer-grid { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
-  .mobile-bar { display: grid; }
+  .mobile-bar { display: none !important; }
   .hero { min-height: 230px; padding: 22px; }
   .glass-3d strong { font-size: 24px; }
+  .page-title { font-size: 28px; }
+  .arabic-line { font-size: 32px; line-height: 2.35; }
+  .arabic-line.arabic-lg { font-size: 38px; }
+  .arabic-line.arabic-xl { font-size: 44px; }
 }
 
 @media print {

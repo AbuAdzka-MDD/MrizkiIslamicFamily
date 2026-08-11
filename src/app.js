@@ -14,7 +14,7 @@ const storageKey = `${config.familyId}:data:v3`;
 const queueKey = `${config.familyId}:offlineQueue:v3`;
 const authKey = `${config.familyId}:auth:v1`;
 const sessionKey = `${config.familyId}:session:v1`;
-const quranCacheKey = `${config.familyId}:quranCache:v1`;
+const quranCacheKey = `${config.familyId}:quranCache:v2`;
 const prayerLocationKey = `${config.familyId}:prayerLocation:v1`;
 let state = loadData();
 let queue = loadQueue();
@@ -83,6 +83,12 @@ const QURAN_QARIS = [
   ["ar.hanirifai", "Hani Ar-Rifai"],
   ["ar.husary", "Mahmoud Khalil Al-Husary"],
   ["ar.minshawi", "Mohamed Siddiq Al-Minshawi"]
+];
+
+const BISMILLAH_ARABIC = "\u0628\u0650\u0633\u0652\u0645\u0650 \u0627\u0644\u0644\u0651\u064e\u0647\u0650 \u0627\u0644\u0631\u0651\u064e\u062d\u0652\u0645\u064e\u0670\u0646\u0650 \u0627\u0644\u0631\u0651\u064e\u062d\u0650\u064a\u0645\u0650";
+const BISMILLAH_VARIANTS = [
+  BISMILLAH_ARABIC,
+  "\u0628\u0650\u0633\u0652\u0645\u0650 \u0671\u0644\u0644\u0651\u064e\u0647\u0650 \u0671\u0644\u0631\u0651\u064e\u062d\u0652\u0645\u064e\u0670\u0646\u0650 \u0671\u0644\u0631\u0651\u064e\u062d\u0650\u064a\u0645\u0650"
 ];
 
 const QURAN_SURAHS = [
@@ -378,9 +384,7 @@ function renderNav(role = document.getElementById("roleSelect")?.value || "abi")
   const mobile = document.getElementById("mobileNav");
   const visibleNav = allowedNavItems(role);
   desktop.innerHTML = visibleNav.map(([id, label]) => `<button data-view="${id}" class="${id === "dashboard" ? "active" : ""}">${label}</button>`).join("");
-  const mobileItems = [["dashboard", "Beranda"], ["daily", "Aktivitas"], ["growth", "Input"], ["quran", "Qur'an"], ["members", "Profil"]]
-    .filter(([id]) => visibleNav.some(([viewId]) => viewId === id));
-  mobile.innerHTML = mobileItems.map(([id, label]) => `<button data-view="${id}" class="${id === "dashboard" ? "active" : ""}">${label}</button>`).join("");
+  mobile.innerHTML = visibleNav.map(([id, label]) => `<button data-view="${id}" class="${id === "dashboard" ? "active" : ""}">${label}</button>`).join("");
   document.querySelectorAll("[data-view]").forEach(button => button.addEventListener("click", () => showView(button.dataset.view)));
 }
 
@@ -845,16 +849,20 @@ async function loadQuranSelection(mode, reference, qari) {
     qari,
     title,
     source: "AlQuran Cloud",
-    ayahs: arabicAyahs.map(ayah => ({
-      number: ayah.number,
-      numberInSurah: ayah.numberInSurah,
-      juz: ayah.juz,
-      surahNumber: ayah.surah?.number,
-      surahName: ayah.surah?.englishName || QURAN_SURAHS[(ayah.surah?.number || 1) - 1],
-      arabic: ayah.text,
-      translation: translationByNumber.get(ayah.number) || "Terjemahan belum tersedia.",
-      audio: audioByNumber.get(ayah.number) || ""
-    }))
+    ayahs: arabicAyahs.map(ayah => {
+      const surahNumber = mode === "surah" ? reference : ayah.surah?.number;
+      return {
+        number: ayah.number,
+        numberInSurah: ayah.numberInSurah,
+        juz: ayah.juz,
+        surahNumber,
+        surahName: ayah.surah?.englishName || QURAN_SURAHS[(surahNumber || 1) - 1],
+        arabic: normalizeQuranArabic(ayah.text, surahNumber, ayah.numberInSurah),
+        hasOpeningBismillah: shouldShowOpeningBismillah(surahNumber, ayah.numberInSurah),
+        translation: translationByNumber.get(ayah.number) || "Terjemahan belum tersedia.",
+        audio: audioByNumber.get(ayah.number) || ""
+      };
+    })
   };
 }
 
@@ -874,9 +882,10 @@ function renderMushaf(data, size, sourceLabel) {
       <article class="ayah-card">
         <div class="ayah-meta">
           <span>${escapeHtml(ayah.surahName || "Surah")} : ${ayah.numberInSurah}</span>
-          <button class="icon-button mini" type="button" title="Putar ayat" data-play-ayah="${escapeHtml(ayah.audio)}">♪</button>
+          <button class="icon-button mini" type="button" title="Putar ayat" data-play-ayah="${escapeHtml(ayah.audio)}">&#9834;</button>
         </div>
-        <div class="arabic-line${sizeClass}">${colorizeTajwid(ayah.arabic)} <span class="ayah-number">${ayah.numberInSurah}</span></div>
+        ${ayah.hasOpeningBismillah ? `<div class="arabic-line bismillah-line${sizeClass}">${escapeHtml(BISMILLAH_ARABIC)}</div>` : ""}
+        <div class="arabic-line${sizeClass}">${escapeHtml(ayah.arabic)} <span class="ayah-number">${ayah.numberInSurah}</span></div>
         <div class="translation-line">${escapeHtml(ayah.translation)}</div>
       </article>`).join("")}
     <div class="form-actions" style="justify-content:flex-start; flex-wrap:wrap">
@@ -888,11 +897,16 @@ function renderMushaf(data, size, sourceLabel) {
 }
 
 function colorizeTajwid(text) {
-  return escapeHtml(text)
-    .replace(/([اويآ]{2,}|ٰ)/g, '<span class="tajwid mad">$1</span>')
-    .replace(/([نًٌٍْ])([تثجدذزسشصضطظفقك])/g, '<span class="tajwid ikhfa">$1$2</span>')
-    .replace(/([نًٌٍْ])([يرملون])/g, '<span class="tajwid idgham">$1$2</span>')
-    .replace(/([قطبجد])ْ/g, '<span class="tajwid qalqalah">$1ْ</span>');
+  return escapeHtml(text);
+}
+
+function shouldShowOpeningBismillah(surahNumber, ayahNumber) {
+  return Number(ayahNumber) === 1 && ![1, 9].includes(Number(surahNumber));
+}
+
+function normalizeQuranArabic(text = "", surahNumber, ayahNumber) {
+  if (!shouldShowOpeningBismillah(surahNumber, ayahNumber)) return text;
+  return BISMILLAH_VARIANTS.reduce((clean, bismillah) => clean.replace(bismillah, "").trim(), text);
 }
 
 function playVisibleQuranAudio() {
