@@ -235,6 +235,7 @@ function init() {
   renderNav();
   buildViews();
   bindTopActions();
+  bindMobileDrawer();
   initAuth();
   initPrayerLocation();
   tickIslamicWidget();
@@ -385,7 +386,10 @@ function renderNav(role = document.getElementById("roleSelect")?.value || "abi")
   const visibleNav = allowedNavItems(role);
   desktop.innerHTML = visibleNav.map(([id, label]) => `<button data-view="${id}" class="${id === "dashboard" ? "active" : ""}">${label}</button>`).join("");
   mobile.innerHTML = visibleNav.map(([id, label]) => `<button data-view="${id}" class="${id === "dashboard" ? "active" : ""}">${label}</button>`).join("");
-  document.querySelectorAll("[data-view]").forEach(button => button.addEventListener("click", () => showView(button.dataset.view)));
+  document.querySelectorAll("[data-view]").forEach(button => button.addEventListener("click", () => {
+    showView(button.dataset.view);
+    closeMobileDrawer();
+  }));
 }
 
 function allowedNavItems(role) {
@@ -401,6 +405,45 @@ function showView(id) {
   const item = navItems.find(([viewId]) => viewId === id);
   document.getElementById("pageTitle").textContent = item ? item[1] : "Dashboard";
   renderAll();
+}
+
+function bindMobileDrawer() {
+  document.getElementById("mobileMenuToggle")?.addEventListener("click", toggleMobileDrawer);
+  document.getElementById("sidebarBackdrop")?.addEventListener("click", closeMobileDrawer);
+  window.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeMobileDrawer();
+  });
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 720) closeMobileDrawer();
+  });
+}
+
+function toggleMobileDrawer() {
+  const isOpen = document.body.classList.contains("sidebar-open");
+  if (isOpen) closeMobileDrawer();
+  else openMobileDrawer();
+}
+
+function openMobileDrawer() {
+  document.body.classList.add("sidebar-open");
+  const toggle = document.getElementById("mobileMenuToggle");
+  const backdrop = document.getElementById("sidebarBackdrop");
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", "true");
+    toggle.textContent = "×";
+  }
+  if (backdrop) backdrop.hidden = false;
+}
+
+function closeMobileDrawer() {
+  document.body.classList.remove("sidebar-open");
+  const toggle = document.getElementById("mobileMenuToggle");
+  const backdrop = document.getElementById("sidebarBackdrop");
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.textContent = "☰";
+  }
+  if (backdrop) backdrop.hidden = true;
 }
 
 function buildViews() {
