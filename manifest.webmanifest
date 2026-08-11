@@ -1,0 +1,16 @@
+{
+  "name": "The Family of Muhammad Rizki",
+  "short_name": "Family Rizki",
+  "description": "Islamic Family Growth Dashboard",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#F7F8FC",
+  "theme_color": "#1840A0",
+  "icons": [
+    {
+      "src": "assets/logo/abu-adzka-logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

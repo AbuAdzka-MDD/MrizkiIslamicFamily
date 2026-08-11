@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The Family of Muhammad Rizki | Islamic Family Growth Dashboard</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+  <script src="config.js"></script>
+</head>
+<body class="auth-locked">
+  <section class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <img class="login-logo" src="assets/logo/abu-adzka-logo.png" alt="Abu Adzka logo">
+      <p class="kicker">The Family of Muhammad Rizki</p>
+      <h1>Islamic Family Growth Dashboard</h1>
+      <p class="tagline">Masuk dengan akun keluarga. Password dibuat pada setup awal dan disimpan sebagai hash lokal atau dapat disambungkan ke Google Workspace.</p>
+
+      <form id="loginForm" class="login-form">
+        <label>Pengguna
+          <select id="loginUser"></select>
+        </label>
+        <label>Password
+          <input id="loginPassword" type="password" autocomplete="current-password" required>
+        </label>
+        <button class="btn primary" type="submit">Masuk Dashboard</button>
+        <p class="status-line" id="loginStatus"></p>
+      </form>
+
+      <form id="setupForm" class="login-form" hidden>
+        <h3>Setup Password Keluarga</h3>
+        <div id="setupFields" class="setup-fields"></div>
+        <button class="btn primary" type="submit">Simpan Password dan Masuk</button>
+        <p class="status-line">Password tidak ditulis di source code. Yang disimpan hanya hash di browser demo.</p>
+      </form>
+    </div>
+  </section>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true"><img src="assets/logo/abu-adzka-logo.png" alt=""></div>
+        <div><h1>The Family of Muhammad Rizki</h1><p>Islamic Family Growth Dashboard</p></div>
+      </div>
+      <div class="account">Google Workspace backend<br><strong id="workspaceOwner">mrizki.markazdigital@gmail.com</strong><br><span id="connectionStatus">Mode demo lokal aktif</span></div>
+      <label class="role-picker">Role aktif
+        <select id="roleSelect">
+          <option value="abi">Kepala Keluarga (Abi)</option>
+          <option value="ummi">Istri (Ummi)</option>
+          <option value="alif_aslam">Alif Aslam (Anak Pertama)</option>
+          <option value="muslim_ihsan">Muslim Ihsan (Anak Kedua)</option>
+          <option value="m_bilal_albana">M. Bilal Albana (Anak Ketiga)</option>
+          <option value="fajri_rahman">Fajri Rahman (Anak Keempat)</option>
+          <option value="adzkadina_salsabila">Adzkadina Salsabila (Anak Kelima)</option>
+        </select>
+      </label>
+      <nav class="nav" id="desktopNav"></nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <p class="kicker">Bismillahirrohmaanirrohiim</p>
+          <h1 class="page-title" id="pageTitle">Dashboard Utama</h1>
+          <p class="tagline" id="tagline">Bertumbuh dalam Iman, Ilmu, Kebersamaan, dan Kemandirian.</p>
+        </div>
+        <div class="actions">
+          <button class="btn" id="syncBtn">Sinkron</button>
+          <button class="btn" id="installBtn">Install PWA</button>
+          <button class="btn" id="logoutBtn">Logout</button>
+          <button class="btn primary" id="exportBtn">Export Laporan PDF</button>
+        </div>
+      </div>
+
+      <section class="view active" id="dashboard">
+        <div class="hero">
+          <div>
+            <img class="hero-logo" src="assets/logo/abu-adzka-logo.png" alt="Abu Adzka logo">
+            <h2>The Family of Muhammad Rizki</h2>
+            <p id="islamicHeader">Memuat salam, tanggal, jadwal salat, dan ringkasan keluarga...</p>
+          </div>
+        </div>
+
+        <div class="islamic-command-grid">
+          <div class="glass-3d realtime-card">
+            <span class="mini-label">Waktu Real-Time</span>
+            <strong id="realTimeClock">--:--:--</strong>
+            <small id="realTimeDate">Memuat hari dan tanggal</small>
+          </div>
+          <div class="glass-3d prayer-focus">
+            <span class="mini-label">Salat Berikutnya</span>
+            <strong id="nextPrayerName">-</strong>
+            <small id="nextPrayerCountdown">-</small>
+            <div class="adhan-row">
+              <button class="icon-button" id="adhanBtn" title="Simulasi suara adzan">♪</button>
+              <span>Adzan reminder aktif</span>
+            </div>
+          </div>
+          <div class="glass-3d qibla-card">
+            <span class="mini-label">Arah Kiblat</span>
+            <div class="compass-3d">
+              <span>N</span>
+              <i></i>
+              <b>295°</b>
+            </div>
+          </div>
+          <div class="glass-3d quran-card">
+            <span class="mini-label">Al-Qur'an Digital</span>
+            <strong>30 Juz</strong>
+            <small>114 surah, terjemahan Indonesia, tajwid berwarna, bookmark, tilawah, hafalan.</small>
+          </div>
+        </div>
+
+        <div class="smart-art">
+          <div><span>Iman</span><b>Spiritual</b></div>
+          <div><span>Ilmu</span><b>Intelektual</b></div>
+          <div><span>Keluarga</span><b>Kebersamaan</b></div>
+          <div><span>Mandiri</span><b>Keuangan</b></div>
+        </div>
+
+        <div class="grid metrics" id="metricGrid"></div>
+
+        <div class="grid two">
+          <div class="panel">
+            <h3>Grafik Perkembangan 7 Hari</h3>
+            <div class="filters">
+              <label>Anggota<select id="filterMember"></select></label>
+              <label>Periode<select id="filterPeriod"><option>Hari</option><option>Pekan</option><option>Bulan</option><option>Tahun</option></select></label>
+              <label>Kategori<select id="filterCategory"><option>Semua</option><option>Spiritual</option><option>Emosional</option><option>Intelektual</option><option>Daily Activity</option><option>Keuangan</option></select></label>
+              <label>Status<select id="filterStatus"><option>Semua</option><option>Selesai</option><option>Direncanakan</option><option>Ditunda</option></select></label>
+              <label>Pencarian<input id="globalSearch" placeholder="Cari laporan"></label>
+            </div>
+            <div class="chart-wrap"><canvas id="progressChart" width="900" height="310"></canvas></div>
+          </div>
+
+          <div class="panel">
+            <h3>Widget Islami</h3>
+            <table>
+              <tbody id="islamicWidget"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid two" style="margin-top:16px">
+          <div class="panel">
+            <h3>Keuangan Keluarga</h3>
+            <div class="chart-wrap"><canvas id="financeChart" width="900" height="310"></canvas></div>
+          </div>
+          <div class="panel">
+            <h3>Aktivitas Terbaru</h3>
+            <ul class="timeline" id="recentActivity"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="members"></section>
+      <section class="view" id="growth"></section>
+      <section class="view" id="daily"></section>
+      <section class="view" id="finance"></section>
+      <section class="view" id="agenda"></section>
+      <section class="view" id="quran"></section>
+      <section class="view" id="prayer"></section>
+      <section class="view" id="reports"></section>
+      <section class="view" id="notifications"></section>
+      <section class="view" id="settings"></section>
+    </main>
+  </div>
+
+  <nav class="mobile-bar" id="mobileNav"></nav>
+
+  <dialog id="pdfDialog">
+    <form method="dialog" class="dialog-body">
+      <h3>Export Laporan PDF</h3>
+      <label>Jenis laporan
+        <select id="pdfType">
+          <option>Laporan seluruh keluarga</option>
+          <option>Laporan per anggota</option>
+          <option>Laporan harian</option>
+          <option>Laporan pekanan</option>
+          <option>Laporan bulanan</option>
+          <option>Laporan tahunan</option>
+          <option>Laporan pengembangan diri</option>
+          <option>Laporan Daily Activity</option>
+          <option>Laporan keuangan</option>
+          <option>Laporan Al-Qur'an</option>
+          <option>Laporan gabungan</option>
+        </select>
+      </label>
+      <label>Periode laporan<input id="pdfPeriod" placeholder="Agustus 2026"></label>
+      <div class="form-actions">
+        <button class="btn" value="cancel">Batal</button>
+        <button class="btn" id="saveDriveBtn" value="drive">Simpan ke Google Drive</button>
+        <button class="btn primary" id="printPdfBtn" value="print">Pratinjau / Simpan PDF</button>
+      </div>
+      <p class="muted">Nama file mengikuti pola The_Family_of_Muhammad_Rizki_[JenisLaporan]_[Periode]_[Tanggal].pdf.</p>
+    </form>
+  </dialog>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
