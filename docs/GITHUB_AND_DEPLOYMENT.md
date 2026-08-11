@@ -2,6 +2,12 @@
 
 Folder ini sudah siap dijadikan repository GitHub.
 
+Repository target:
+
+```text
+https://github.com/AbuAdzka-MDD/MrizkiIslamicFamily
+```
+
 ## Inisialisasi Git
 
 ```bash
@@ -66,6 +72,12 @@ Project Apps Script yang disiapkan:
 
 ```text
 1J8DSWyRC9SB_-UEEe8nqCMrofQVVu2W1F3BLzSEvz-pRm8F-03zie0Mg
+```
+
+Editor project:
+
+```text
+https://script.google.com/u/0/home/projects/1J8DSWyRC9SB_-UEEe8nqCMrofQVVu2W1F3BLzSEvz-pRm8F-03zie0Mg/edit
 ```
 
 ### Upload Manual
