@@ -20,7 +20,7 @@ let state = loadData();
 let queue = loadQueue();
 let editing = null;
 let deferredInstall = null;
-let prayerState = loadPrayerState();
+let prayerState = null;
 let quranAudio = null;
 
 const LOGIN_USERS = [
@@ -65,6 +65,8 @@ const PRAYER_TIMES = [
   ["Magrib", "17:58"],
   ["Isya", "19:08"]
 ];
+
+prayerState = loadPrayerState();
 
 const PRAYER_API_NAMES = {
   Fajr: "Subuh",
