@@ -24,6 +24,7 @@
           <input id="loginPassword" type="password" autocomplete="current-password" required>
         </label>
         <button class="btn primary" type="submit">Masuk Dashboard</button>
+        <button class="btn" id="showSetupBtn" type="button" hidden>Setup Password Keluarga (Abi)</button>
         <p class="status-line" id="loginStatus"></p>
       </form>
 
@@ -42,7 +43,6 @@
         <div class="brand-icon" aria-hidden="true"><img src="assets/logo/abu-adzka-logo.png" alt=""></div>
         <div><h1>The Family of Muhammad Rizki</h1><p>Islamic Family Growth Dashboard</p></div>
       </div>
-      <div class="account">Google Workspace backend<br><strong id="workspaceOwner">mrizki.markazdigital@gmail.com</strong><br><span id="connectionStatus">Mode demo lokal aktif</span></div>
       <label class="role-picker">Role aktif
         <select id="roleSelect">
           <option value="abi">Kepala Keluarga (Abi)</option>
@@ -65,8 +65,6 @@
           <p class="tagline" id="tagline">Bertumbuh dalam Iman, Ilmu, Kebersamaan, dan Kemandirian.</p>
         </div>
         <div class="actions">
-          <button class="btn" id="syncBtn">Sinkron</button>
-          <button class="btn" id="installBtn">Install PWA</button>
           <button class="btn" id="logoutBtn">Logout</button>
           <button class="btn primary" id="exportBtn">Export Laporan PDF</button>
         </div>

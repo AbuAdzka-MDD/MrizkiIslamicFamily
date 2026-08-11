@@ -231,7 +231,6 @@ function financeFields(categories) {
 init();
 
 function init() {
-  document.getElementById("workspaceOwner").textContent = config.workspaceOwner;
   renderNav();
   buildViews();
   bindTopActions();
@@ -254,16 +253,38 @@ function initAuth() {
 
   document.getElementById("loginForm").addEventListener("submit", handleLogin);
   document.getElementById("setupForm").addEventListener("submit", handlePasswordSetup);
+  document.getElementById("showSetupBtn").addEventListener("click", showAbiSetup);
+  loginUser.addEventListener("change", updateSetupAccess);
   document.getElementById("logoutBtn").addEventListener("click", logout);
 
   const auth = loadAuth();
   const session = localStorage.getItem(sessionKey);
   if (!auth) {
-    document.getElementById("loginForm").hidden = true;
-    document.getElementById("setupForm").hidden = false;
+    document.getElementById("loginForm").hidden = false;
+    document.getElementById("setupForm").hidden = true;
+    updateSetupAccess();
     return;
   }
   if (session && auth[session]) unlockApp(session);
+}
+
+function updateSetupAccess() {
+  const auth = loadAuth();
+  const selectedUser = document.getElementById("loginUser").value;
+  const setupButton = document.getElementById("showSetupBtn");
+  const status = document.getElementById("loginStatus");
+  setupButton.hidden = Boolean(auth) || selectedUser !== "abi";
+  if (!auth && selectedUser !== "abi") {
+    status.textContent = "Password keluarga belum dibuat. Setup hanya dapat dilakukan oleh Kepala Keluarga (Abi).";
+  } else if (!auth) {
+    status.textContent = "Setup password keluarga hanya tersedia untuk Kepala Keluarga (Abi).";
+  }
+}
+
+function showAbiSetup() {
+  if (document.getElementById("loginUser").value !== "abi") return;
+  document.getElementById("loginForm").hidden = true;
+  document.getElementById("setupForm").hidden = false;
 }
 
 async function handlePasswordSetup(event) {
@@ -288,7 +309,9 @@ async function handleLogin(event) {
   const status = document.getElementById("loginStatus");
   const auth = loadAuth();
   if (!auth || !auth[user]) {
-    status.textContent = "Password keluarga belum dibuat.";
+    status.textContent = user === "abi"
+      ? "Password keluarga belum dibuat. Gunakan tombol setup khusus Abi."
+      : "Password keluarga belum dibuat. Minta Kepala Keluarga (Abi) melakukan setup terlebih dahulu.";
     return;
   }
   const hash = await hashPassword(auth[user].salt, password);
@@ -306,7 +329,10 @@ function unlockApp(user) {
   const roleSelect = document.getElementById("roleSelect");
   roleSelect.value = user;
   roleSelect.disabled = true;
-  document.getElementById("connectionStatus").textContent = `Login sebagai ${LOGIN_USERS.find(([value]) => value === user)?.[1] || user}`;
+  renderNav(user);
+  if (!canAccess(user, "all") && ["reports", "settings"].some(id => document.getElementById(id).classList.contains("active"))) {
+    showView("dashboard");
+  }
   renderAll();
 }
 
@@ -316,6 +342,9 @@ function logout() {
   document.body.classList.remove("auth-ready");
   document.getElementById("loginPassword").value = "";
   document.getElementById("loginStatus").textContent = "";
+  document.getElementById("loginForm").hidden = false;
+  document.getElementById("setupForm").hidden = true;
+  updateSetupAccess();
 }
 
 function resetPasswords() {
@@ -338,15 +367,25 @@ async function hashPassword(salt, password) {
   return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function renderNav() {
+function renderNav(role = document.getElementById("roleSelect")?.value || "abi") {
   const desktop = document.getElementById("desktopNav");
   const mobile = document.getElementById("mobileNav");
-  desktop.innerHTML = navItems.map(([id, label]) => `<button data-view="${id}" class="${id === "dashboard" ? "active" : ""}">${label}</button>`).join("");
-  mobile.innerHTML = [["dashboard", "Beranda"], ["daily", "Aktivitas"], ["growth", "Input"], ["reports", "Laporan"], ["members", "Profil"]].map(([id, label]) => `<button data-view="${id}" class="${id === "dashboard" ? "active" : ""}">${label}</button>`).join("");
+  const visibleNav = allowedNavItems(role);
+  desktop.innerHTML = visibleNav.map(([id, label]) => `<button data-view="${id}" class="${id === "dashboard" ? "active" : ""}">${label}</button>`).join("");
+  const mobileItems = [["dashboard", "Beranda"], ["daily", "Aktivitas"], ["growth", "Input"], ["quran", "Qur'an"], ["members", "Profil"]]
+    .filter(([id]) => visibleNav.some(([viewId]) => viewId === id));
+  mobile.innerHTML = mobileItems.map(([id, label]) => `<button data-view="${id}" class="${id === "dashboard" ? "active" : ""}">${label}</button>`).join("");
   document.querySelectorAll("[data-view]").forEach(button => button.addEventListener("click", () => showView(button.dataset.view)));
 }
 
+function allowedNavItems(role) {
+  if (canAccess(role, "all")) return navItems;
+  return navItems.filter(([id]) => !["reports", "settings"].includes(id));
+}
+
 function showView(id) {
+  const role = document.getElementById("roleSelect")?.value || "abi";
+  if (!canAccess(role, "all") && ["reports", "settings"].includes(id)) id = "dashboard";
   document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === id));
   document.querySelectorAll("[data-view]").forEach(button => button.classList.toggle("active", button.dataset.view === id));
   const item = navItems.find(([viewId]) => viewId === id);
@@ -816,12 +855,6 @@ function bindTopActions() {
     await backupToDrive("pdf");
     document.getElementById("pdfDialog").close();
   });
-  document.getElementById("syncBtn").addEventListener("click", syncQueue);
-  document.getElementById("installBtn").addEventListener("click", async () => {
-    if (!deferredInstall) return alert("Install PWA tersedia dari menu browser jika tombol belum aktif.");
-    deferredInstall.prompt();
-    deferredInstall = null;
-  });
   document.getElementById("adhanBtn")?.addEventListener("click", () => {
     const audio = new Audio();
     alert("Simulasi adzan aktif. Tambahkan file audio adzan berlisensi pada konfigurasi produksi.");
@@ -869,7 +902,6 @@ async function syncQueue() {
   queue = [];
   saveQueue();
   for (const item of copy) await enqueueOrSend(item);
-  document.getElementById("connectionStatus").textContent = queue.length ? `${queue.length} item masih antre` : "Sinkronisasi selesai";
   renderAll();
 }
 
