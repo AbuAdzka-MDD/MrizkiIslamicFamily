@@ -73,6 +73,13 @@ https://abuadzka-mdd.github.io/MrizkiIslamicFamily/
 
 Workflow deploy tersedia di `.github/workflows/deploy-pages.yml`.
 
+Branch `gh-pages` juga sudah disiapkan sebagai fallback source GitHub Pages.
+Jika URL masih 404, buka **Settings > Pages** pada repository, lalu pilih:
+
+- Source: **Deploy from a branch**
+- Branch: **gh-pages**
+- Folder: **/(root)**
+
 ## Mengaktifkan Google Workspace Backend
 
 1. Login dengan akun `mrizki.markazdigital@gmail.com`.

@@ -47,9 +47,18 @@ Untuk GitHub Pages:
 
 1. Push repository ke GitHub.
 2. Buka **Settings > Pages**.
-3. Pilih branch `main`.
-4. Pilih root folder `/`.
-5. Simpan.
+3. Pilih **Deploy from a branch**.
+4. Pilih branch `gh-pages`.
+5. Pilih root folder `/`.
+6. Simpan.
+
+URL aplikasi:
+
+```text
+https://abuadzka-mdd.github.io/MrizkiIslamicFamily/
+```
+
+Catatan: branch `gh-pages` sudah dipush sebagai fallback source Pages. Workflow GitHub Actions juga tersedia, tetapi aktivasi Pages dari repository settings membutuhkan akses admin.
 
 ## Backend Google Workspace
 
