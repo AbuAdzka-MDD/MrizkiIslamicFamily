@@ -17,9 +17,9 @@ Paket ini adalah aplikasi demo runnable berbasis Web/PWA karena Flutter tidak te
 - Dashboard real-time lokal setelah data disimpan.
 - Grafik canvas untuk progres dan keuangan.
 - Visual Islami modern dengan warna pink, royal blue, putih, dan gold; kartu 3D, smart art, kompas 3D, diagram, chart, dan pola geometri Islami.
-- Widget Islami: hari, tanggal, jam real-time, tanggal Hijriah, jadwal salat demo, countdown salat, tombol simulasi adzan, dan arah kiblat demo.
+- Widget Islami: hari, tanggal, jam real-time, tanggal Hijriah, jadwal sholat demo, countdown sholat, tombol simulasi adzan, dan arah kiblat demo.
 - Al-Qur'an digital UI: selector 30 juz, 114 surah, contoh mushaf, terjemahan Indonesia, legenda tajwid berwarna, qari, bookmark, ulangi ayat, catatan, tilawah, dan hafalan.
-- Modul anggota keluarga, pengembangan diri, daily activity, financial freedom, agenda, Al-Qur'an progress, salat/kiblat, laporan, notifikasi, pengaturan.
+- Modul anggota keluarga, pengembangan diri, daily activity, financial freedom, agenda, Al-Qur'an progress, sholat/kiblat, laporan, notifikasi, pengaturan.
 - Export laporan PDF melalui dialog print/save as PDF.
 - Offline cache via service worker dan offline queue untuk sinkronisasi.
 - Google Apps Script backend untuk 20 sheet dan folder Google Drive.
@@ -170,7 +170,7 @@ Jika Node tidak ada di PATH, gunakan Node runtime bawaan Codex.
 - Google OAuth Client ID untuk Google Sign-In produksi.
 - Kebijakan whitelist email anggota keluarga.
 - Spreadsheet/Drive sharing policy final.
-- API jadwal salat produksi dan izin lokasi.
+- API jadwal sholat produksi dan izin lokasi.
 - API Al-Qur'an lengkap 30 juz, font Arab, audio murattal, tajwid berwarna, terjemahan, dan lisensinya.
 - Generator PDF native untuk Flutter produksi.
 
@@ -178,7 +178,7 @@ Jika Node tidak ada di PATH, gunakan Node runtime bawaan Codex.
 
 1. Migrasikan PWA demo ini ke Flutter feature-first.
 2. Tambahkan Google Sign-In resmi dan validasi token di Apps Script.
-3. Tambahkan API jadwal salat berbasis lokasi pengguna.
+3. Tambahkan API jadwal sholat berbasis lokasi pengguna.
 4. Integrasikan sumber Al-Qur'an resmi tanpa mengubah teks ayat.
 5. Perketat akses Drive/Sheets berdasarkan whitelist keluarga.
 6. Tambahkan test end-to-end untuk CRUD, role, offline queue, dan export laporan.

@@ -156,7 +156,7 @@ export function seedData(now = new Date()) {
     ],
     Spiritual_Programs: [],
     Spiritual_Logs: [
-      base("Spiritual_Logs", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, program_name: "Salat Subuh", target: "Tepat waktu", realization: "Sudah", status: "Selesai", privacy: "private" })
+      base("Spiritual_Logs", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, program_name: "Sholat Subuh", target: "Tepat waktu", realization: "Sudah", status: "Selesai", privacy: "private" })
     ],
     Emotional_Programs: [],
     Emotional_Logs: [

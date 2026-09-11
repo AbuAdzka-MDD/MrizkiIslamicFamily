@@ -51,7 +51,7 @@ const navItems = [
   ["finance", "Financial Freedom"],
   ["agenda", "Agenda Keluarga"],
   ["quran", "Al-Qur'an"],
-  ["prayer", "Waktu Salat dan Kiblat"],
+  ["prayer", "Waktu Sholat dan Kiblat"],
   ["reports", "Laporan"],
   ["notifications", "Notifikasi"],
   ["settings", "Pengaturan"]
@@ -126,7 +126,7 @@ const sheetForms = {
     fields: [
       ["member_name", "Nama anggota", "text", true],
       ["date", "Tanggal", "date", true],
-      ["program_name", "Nama kegiatan", "select", true, ["Salat Subuh", "Salat Zuhur", "Salat Asar", "Salat Magrib", "Salat Isya", "Salat berjamaah", "Rawatib", "Tahajud", "Duha", "Dzikir pagi", "Dzikir petang", "Tilawah Al-Qur'an", "Hafalan Al-Qur'an", "Murajaah", "Tafsir", "Puasa Senin-Kamis", "Ayyamul Bidh", "Sedekah", "Kajian Islam", "Silaturahmi", "Birrul walidain"]],
+      ["program_name", "Nama kegiatan", "select", true, ["Sholat Subuh", "Sholat Zuhur", "Sholat Asar", "Sholat Magrib", "Sholat Isya", "Sholat berjamaah", "Rawatib", "Tahajud", "Duha", "Dzikir pagi", "Dzikir petang", "Tilawah Al-Qur'an", "Hafalan Al-Qur'an", "Murajaah", "Tafsir", "Puasa Senin-Kamis", "Ayyamul Bidh", "Sedekah", "Kajian Islam", "Silaturahmi", "Birrul walidain"]],
       ["target", "Target", "text"],
       ["realization", "Realisasi", "text"],
       ["status", "Status", "select", false, ["Direncanakan", "Sedang berlangsung", "Selesai", "Ditunda"]],
@@ -214,14 +214,14 @@ const sheetForms = {
     fields: [["member_name", "Nama anggota", "text", true], ["date", "Tanggal", "date", true], ["surah", "Surah", "text"], ["juz", "Juz", "number"], ["last_read", "Terakhir dibaca", "text"], ["pages_read", "Halaman dibaca", "number"], ["verses_memorized", "Ayat dihafal", "number"], ["murajaah", "Murajaah", "text"], ["qari", "Qari", "text"], ["notes", "Catatan ayat", "textarea"], ["bookmark", "Bookmark", "text"]]
   },
   Prayer_Settings: {
-    title: "Waktu Salat dan Kiblat",
+    title: "Waktu Sholat dan Kiblat",
     view: "prayer",
     fields: [["member_name", "Nama anggota", "text"], ["date", "Tanggal", "date"], ["location", "Lokasi", "text"], ["method", "Metode", "select", false, ["Kementerian Agama RI", "Manual"]], ["subuh", "Subuh", "time"], ["syuruq", "Syuruq", "time"], ["zuhur", "Zuhur", "time"], ["asar", "Asar", "time"], ["magrib", "Magrib", "time"], ["isya", "Isya", "time"], ["qibla_degree", "Arah kiblat derajat", "number"], ["manual_adjustment", "Penyesuaian manual", "text"]]
   },
   Notifications: {
     title: "Notifikasi",
     view: "notifications",
-    fields: [["member_name", "Nama anggota", "text"], ["date", "Tanggal", "date"], ["notification_type", "Jenis", "select", false, ["Waktu salat", "Dzikir", "Tilawah", "Hafalan", "Daily Activity", "Agenda", "Tagihan", "Target tabungan", "Laporan mingguan"]], ["enabled", "Aktif", "select", false, ["Ya", "Tidak"]], ["time", "Waktu", "time"], ["sound", "Suara", "text"], ["vibration", "Getar", "select", false, ["Ya", "Tidak"]], ["frequency", "Frekuensi", "text"], ["notes", "Catatan", "textarea"]]
+    fields: [["member_name", "Nama anggota", "text"], ["date", "Tanggal", "date"], ["notification_type", "Jenis", "select", false, ["Waktu sholat", "Dzikir", "Tilawah", "Hafalan", "Daily Activity", "Agenda", "Tagihan", "Target tabungan", "Laporan mingguan"]], ["enabled", "Aktif", "select", false, ["Ya", "Tidak"]], ["time", "Waktu", "time"], ["sound", "Suara", "text"], ["vibration", "Getar", "select", false, ["Ya", "Tidak"]], ["frequency", "Frekuensi", "text"], ["notes", "Catatan", "textarea"]]
   }
 };
 
@@ -524,7 +524,7 @@ function enhancePrayerView() {
   node.insertAdjacentHTML("afterbegin", `
     <div class="grid two" style="margin-bottom:16px">
       <div class="panel">
-        <h3>Jadwal Salat dan Adzan</h3>
+        <h3>Jadwal Sholat dan Adzan</h3>
         <div class="table-tools">
           <button class="btn small primary" type="button" id="useLocationBtn">Gunakan Lokasi Saya</button>
           <span class="pill" id="prayerLocationLabel">Memuat lokasi...</span>
@@ -795,7 +795,7 @@ function tickIslamicWidget() {
   const hijri = new Intl.DateTimeFormat("id-ID-u-ca-islamic", { day: "numeric", month: "long", year: "numeric" }).format(now);
   const date = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(now);
   const prayer = nextPrayer(now);
-  document.getElementById("islamicHeader").textContent = `${greeting}, keluarga Muhammad Rizki. ${date}. Hijriah: ${hijri}. Salat berikutnya ${prayer.name} dalam ${prayer.countdown}.`;
+  document.getElementById("islamicHeader").textContent = `${greeting}, keluarga Muhammad Rizki. ${date}. Hijriah: ${hijri}. Sholat berikutnya ${prayer.name} dalam ${prayer.countdown}.`;
   const clock = document.getElementById("realTimeClock");
   const dateNode = document.getElementById("realTimeDate");
   const prayerName = document.getElementById("nextPrayerName");
@@ -812,7 +812,7 @@ function tickIslamicWidget() {
     ["Lokasi", location],
     ["Metode", prayerState.methodLabel],
     ...currentPrayerTimes(),
-    ["Salat berikutnya", `${prayer.name} - ${prayer.countdown}`],
+    ["Sholat berikutnya", `${prayer.name} - ${prayer.countdown}`],
     ["Arah kiblat", `${Math.round(prayerState.qibla)} derajat dari utara`]
   ].map(row => `<tr><th>${row[0]}</th><td>${row[1]}</td></tr>`).join("");
   updateQiblaDisplays();
