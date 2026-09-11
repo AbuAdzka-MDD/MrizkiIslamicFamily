@@ -203,6 +203,34 @@
     </form>
   </dialog>
 
+  <script>
+    (() => {
+      const replaceSholatText = root => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        while (walker.nextNode()) nodes.push(walker.currentNode);
+        nodes.forEach(node => {
+          node.nodeValue = node.nodeValue
+            .replace(/\bSalat\b/g, "Sholat")
+            .replace(/\bsalat\b/g, "sholat");
+        });
+      };
+      window.addEventListener("DOMContentLoaded", () => {
+        replaceSholatText(document.body);
+        new MutationObserver(records => {
+          records.forEach(record => record.addedNodes.forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              node.nodeValue = node.nodeValue
+                .replace(/\bSalat\b/g, "Sholat")
+                .replace(/\bsalat\b/g, "sholat");
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+              replaceSholatText(node);
+            }
+          }));
+        }).observe(document.body, { childList: true, subtree: true });
+      });
+    })();
+  </script>
   <script type="module" src="src/app.js?v=sholat-1"></script>
 </body>
 </html>
