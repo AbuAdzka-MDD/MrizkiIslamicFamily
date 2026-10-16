@@ -14,6 +14,7 @@ const storageKey = `${config.familyId}:data:v3`;
 const queueKey = `${config.familyId}:offlineQueue:v3`;
 const authKey = `${config.familyId}:auth:v1`;
 const sessionKey = `${config.familyId}:session:v1`;
+const profilePhotoKey = `${config.familyId}:profilePhotos:v1`;
 const quranCacheKey = `${config.familyId}:quranCache:v2`;
 const prayerLocationKey = `${config.familyId}:prayerLocation:v1`;
 let state = loadData();
@@ -240,6 +241,7 @@ function init() {
   initPrayerLocation();
   tickIslamicWidget();
   setInterval(tickIslamicWidget, 1000);
+  window.addEventListener("resize", drawCharts);
   renderAll();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./service-worker.js").catch(() => {});
   window.addEventListener("beforeinstallprompt", event => { event.preventDefault(); deferredInstall = event; });
@@ -255,14 +257,11 @@ function initAuth() {
   document.getElementById("togglePasswordBtn")?.addEventListener("click", togglePasswordVisibility);
   document.getElementById("setupForm")?.addEventListener("submit", handlePasswordSetup);
   document.getElementById("logoutBtn").addEventListener("click", logout);
+  document.getElementById("profilePhotoInput")?.addEventListener("change", handleProfilePhoto);
 
-  const auth = loadAuth();
   const session = localStorage.getItem(sessionKey);
-  if (!auth) {
-    document.getElementById("loginForm").hidden = false;
-    return;
-  }
-  if (session && auth[session]) unlockApp(session);
+  if (LOGIN_USERS.some(([user]) => user === session)) unlockApp(session);
+  else document.getElementById("loginForm").hidden = false;
 }
 
 function renderPasswordSetupFields() {
@@ -409,11 +408,73 @@ function unlockApp(user) {
   const roleSelect = document.getElementById("roleSelect");
   roleSelect.value = user;
   roleSelect.disabled = true;
+  updateDashboardProfile(user);
   renderNav(user);
   if (!canAccess(user, "all") && ["reports", "settings"].some(id => document.getElementById(id).classList.contains("active"))) {
     showView("dashboard");
   }
   renderAll();
+}
+
+function updateDashboardProfile(user) {
+  const member = state.Family_Members.find(row => row.member_id === ACTIVE_ROLE_MEMBER[user]);
+  const displayName = dashboardUserName(user, member);
+  const image = document.getElementById("dashboardProfilePhoto");
+  if (image) {
+    image.src = loadProfilePhotos()[user] || "assets/logo/abu-adzka-logo.png";
+    image.alt = `Foto profil ${displayName}`;
+  }
+  tickIslamicWidget();
+}
+
+function dashboardUserName(user, member) {
+  const familiarNames = {
+    abi: "Abi", ummi: "Ummi", alif_aslam: "Alif Aslam",
+    muslim_ihsan: "Muslim Ihsan", m_bilal_albana: "M. Bilal Albana",
+    fajri_rahman: "Fajri Rahman", adzkadina_salsabila: "Adzkadina Salsabila"
+  };
+  const actualName = member?.nickname || member?.member_name;
+  if (actualName && !/^(kepala keluarga|istri|anak (pertama|kedua|ketiga|keempat|kelima))$/i.test(actualName.trim())) {
+    if (["abi", "ummi"].includes(user) && !actualName.toLowerCase().startsWith(familiarNames[user].toLowerCase())) return `${familiarNames[user]} ${actualName}`;
+    return actualName;
+  }
+  return familiarNames[user] || "Keluarga";
+}
+
+async function handleProfilePhoto(event) {
+  const input = event.currentTarget;
+  const file = input.files?.[0];
+  const user = localStorage.getItem(sessionKey);
+  if (!file || !user || !file.type.startsWith("image/")) return;
+  const image = document.getElementById("dashboardProfilePhoto");
+  const status = document.getElementById("profilePhotoStatus");
+  const previewUrl = URL.createObjectURL(file);
+  if (image) image.src = previewUrl;
+  try {
+    const decodedImage = new Image();
+    await new Promise((resolve, reject) => {
+      decodedImage.onload = resolve;
+      decodedImage.onerror = reject;
+      decodedImage.src = previewUrl;
+    });
+    const canvas = document.createElement("canvas");
+    const scale = Math.min(1, 512 / Math.max(decodedImage.width, decodedImage.height));
+    canvas.width = Math.round(decodedImage.width * scale);
+    canvas.height = Math.round(decodedImage.height * scale);
+    canvas.getContext("2d").drawImage(decodedImage, 0, 0, canvas.width, canvas.height);
+    const photos = loadProfilePhotos();
+    photos[user] = canvas.toDataURL("image/jpeg", 0.82);
+    localStorage.setItem(profilePhotoKey, JSON.stringify(photos));
+    if (status) status.textContent = "Foto profil tersimpan";
+  } catch {
+    if (status) status.textContent = "Foto gagal disimpan. Coba JPG, PNG, atau WebP yang lebih kecil.";
+  }
+  input.value = "";
+}
+
+function loadProfilePhotos() {
+  try { return JSON.parse(localStorage.getItem(profilePhotoKey) || "{}"); }
+  catch { return {}; }
 }
 
 function logout() {
@@ -869,7 +930,11 @@ function tickIslamicWidget() {
   const hijri = new Intl.DateTimeFormat("id-ID-u-ca-islamic", { day: "numeric", month: "long", year: "numeric" }).format(now);
   const date = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(now);
   const prayer = nextPrayer(now);
-  document.getElementById("islamicHeader").textContent = `${greeting}, keluarga Muhammad Rizki. ${date}. Hijriah: ${hijri}. Sholat berikutnya ${prayer.name} dalam ${prayer.countdown}.`;
+  const heading = document.getElementById("islamicHeader");
+  const currentUser = document.getElementById("roleSelect")?.value || localStorage.getItem(sessionKey);
+  const member = state.Family_Members.find(row => row.member_id === ACTIVE_ROLE_MEMBER[currentUser]);
+  const displayName = dashboardUserName(currentUser, member);
+  if (heading) heading.textContent = `${greeting}, ${displayName}. ${date}. Hijriah: ${hijri}. Sholat berikutnya ${prayer.name} dalam ${prayer.countdown}.`;
   const clock = document.getElementById("realTimeClock");
   const dateNode = document.getElementById("realTimeDate");
   const prayerName = document.getElementById("nextPrayerName");
@@ -1089,32 +1154,47 @@ function drawFinanceChart(canvas) {
 }
 
 function drawBarChart(ctx, canvas, rows, suffix) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const width = Math.max(280, canvas.clientWidth || canvas.width);
+  const height = 260;
+  const ratio = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(width * ratio) || canvas.height !== Math.round(height * ratio)) {
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+  }
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.clearRect(0, 0, width, height);
   const max = Math.max(1, ...rows.map(row => row[1]));
-  const background = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  const background = ctx.createLinearGradient(0, 0, width, height);
   background.addColorStop(0, "#ffffff");
   background.addColorStop(1, "#f7f8fc");
   ctx.fillStyle = background;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.font = "18px Segoe UI";
+  ctx.fillRect(0, 0, width, height);
+  const barLeft = Math.min(142, Math.max(104, width * 0.25));
+  const barWidth = Math.max(24, width - barLeft - 116);
+  ctx.textAlign = "left";
+  ctx.font = "14px Segoe UI";
   rows.forEach((row, index) => {
     const y = 38 + index * 56;
-    const width = Math.max(8, (row[1] / max) * (canvas.width - 230));
+    const fillWidth = Math.max(4, (row[1] / max) * barWidth);
     ctx.fillStyle = "#10245E";
-    ctx.fillText(row[0], 18, y);
+    ctx.fillText(row[0], 8, y);
     ctx.fillStyle = "#D8DEEB";
-    ctx.fillRect(164, y - 14, canvas.width - 220, 24);
+    ctx.fillRect(barLeft + 4, y - 14, barWidth, 24);
     ctx.fillStyle = "#E8EDF7";
-    ctx.fillRect(160, y - 18, canvas.width - 220, 24);
-    const fill = ctx.createLinearGradient(160, y - 18, 160 + width, y + 6);
+    ctx.fillRect(barLeft, y - 18, barWidth, 24);
+    const fill = ctx.createLinearGradient(barLeft, y - 18, barLeft + fillWidth, y + 6);
     fill.addColorStop(0, row[2]);
     fill.addColorStop(1, "#FFFFFF");
     ctx.fillStyle = fill;
-    ctx.fillRect(160, y - 18, width, 24);
+    ctx.fillRect(barLeft, y - 18, fillWidth, 24);
     ctx.fillStyle = "rgba(16,36,94,.12)";
-    ctx.fillRect(160, y + 6, width, 8);
+    ctx.fillRect(barLeft, y + 6, fillWidth, 8);
     ctx.fillStyle = "#172033";
-    ctx.fillText(suffix === "Rp" ? rupiah(row[1]) : `${row[1]}%`, canvas.width - 54, y);
+    ctx.textAlign = "right";
+    ctx.font = suffix === "Rp" ? "11px Segoe UI" : "12px Segoe UI";
+    ctx.fillText(suffix === "Rp" ? rupiah(row[1]) : `${row[1]}%`, width - 4, y, 108);
+    ctx.textAlign = "left";
+    ctx.font = "14px Segoe UI";
   });
 }
 

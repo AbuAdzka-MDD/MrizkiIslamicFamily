@@ -1,4 +1,4 @@
-const CACHE_NAME = "family-rizki-pwa-v14";
+const CACHE_NAME = "family-rizki-pwa-v15";
 const ASSETS = [
   "./",
   "./index.html",

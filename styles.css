@@ -334,10 +334,11 @@ button, input, select, textarea { font: inherit; }
 }
 .profile-photo-control input {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   opacity: 0;
-  pointer-events: none;
+  cursor: pointer;
 }
 .profile-photo-control:focus-within { outline: 2px solid white; outline-offset: 3px; }
 
@@ -832,6 +833,7 @@ table {
 #dashboard th, #dashboard td { overflow-wrap: anywhere; }
 #dashboard th:first-child { width: 48%; }
 #dashboard td { text-align: right; }
+#dashboard .chart-wrap { overflow: visible; }
 
 th, td {
   padding: 10px 11px;
