@@ -759,6 +759,29 @@ label {
   font-weight: 800;
 }
 
+.access-module-option,
+.inline-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.access-module-option input[type="checkbox"],
+.inline-checkbox input[type="checkbox"] {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+}
+
+.access-module-option span { line-height: 1.35; }
+
 input, select, textarea {
   width: 100%;
   border: 1px solid var(--line);
