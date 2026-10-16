@@ -805,6 +805,25 @@ textarea { min-height: 88px; resize: vertical; }
   margin-top: 14px;
 }
 
+.conflict-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.conflict-row > div:first-child { min-width: 0; }
+.conflict-row span { display: block; color: var(--muted); overflow-wrap: anywhere; }
+.conflict-row .form-actions { margin: 0; }
+
+@media (max-width: 560px) {
+  .conflict-row { align-items: stretch; flex-direction: column; }
+  .conflict-row .form-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .conflict-row .btn { min-width: 0; white-space: normal; }
+}
+
 .table-tools {
   display: flex;
   gap: 10px;

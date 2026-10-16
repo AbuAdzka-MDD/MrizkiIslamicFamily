@@ -3,25 +3,26 @@
 **Islamic Family Growth Dashboard**  
 Tagline: **Bertumbuh dalam Iman, Ilmu, Kebersamaan, dan Kemandirian.**
 
-Paket ini adalah aplikasi demo runnable berbasis Web/PWA karena Flutter tidak tersedia di environment kerja ini. Struktur fitur, data, backend Google Workspace, mode demo, export PDF, dan dokumentasi disiapkan agar mudah dimigrasikan menjadi Flutter produksi.
+Paket ini adalah aplikasi Web/PWA keluarga dengan Google Apps Script sebagai backend dan Google Sheets/Drive sebagai penyimpanan. Perubahan baru aktif di alamat online setelah berkas Apps Script dan isi branch `gh-pages` diperbarui.
 
 ## Yang Sudah Dibuat
 
 - Frontend responsif untuk mobile, tablet, desktop, dan PWA.
 - Logo aplikasi dan login memakai aset `assets/logo/abu-adzka-logo.png`.
-- Login password untuk Abi, Ummi, dan seluruh anak. Password dibuat pada setup awal dan disimpan sebagai hash, bukan plaintext.
-- Mode demo lokal tanpa kredensial Google.
+- Login password untuk Abi, Ummi, dan seluruh anak. Hash password berada di Script Properties Apps Script; sandi asli tidak disimpan.
 - Data awal keluarga: Kepala Keluarga (Abi), Istri (Ummi), Alif Aslam, Muslim Ihsan, M. Bilal Albana, Fajri Rahman, dan Adzkadina Salsabila.
 - CRUD tambah, edit, hapus, pencarian, dan filter.
-- Role demo: Abi, Ummi, Alif Aslam, Muslim Ihsan, M. Bilal Albana, Fajri Rahman, dan Adzkadina Salsabila.
-- Dashboard real-time lokal setelah data disimpan.
+- Hak akses per akun; Abi dapat mengaktifkan/menonaktifkan akun dan memilih modul yang boleh dibuka.
+- Dashboard diperbarui dari Google Sheets dan tetap bisa menampung perubahan saat offline.
 - Grafik canvas untuk progres dan keuangan.
 - Visual Islami modern dengan warna pink, royal blue, putih, dan gold; kartu 3D, smart art, kompas 3D, diagram, chart, dan pola geometri Islami.
-- Widget Islami: hari, tanggal, jam real-time, tanggal Hijriah, jadwal sholat demo, countdown sholat, tombol simulasi adzan, dan arah kiblat demo.
+- Widget Islami: hari, tanggal, jam real-time, tanggal Hijriah, jadwal sholat berdasarkan lokasi, countdown sholat, pengingat, dan arah kiblat.
 - Al-Qur'an digital UI: selector 30 juz, 114 surah, contoh mushaf, terjemahan Indonesia, legenda tajwid berwarna, qari, bookmark, ulangi ayat, catatan, tilawah, dan hafalan.
 - Modul anggota keluarga, pengembangan diri, daily activity, financial freedom, agenda, Al-Qur'an progress, sholat/kiblat, laporan, notifikasi, pengaturan.
 - Export laporan PDF melalui dialog print/save as PDF.
-- Offline cache via service worker dan offline queue untuk sinkronisasi.
+- Offline cache via service worker dan antrean maksimal 500 perubahan yang baru dibuang setelah server mengakui penyimpanan.
+- Sinkronisasi dua arah bertahap, pengiriman idempotent, pembatasan tulis server, dan deteksi konflik saat baris yang sama diedit di dua perangkat.
+- Pembersihan otomatis hanya untuk baris server yang ditandai `created_by` atau `updated_by` sebagai `demo`; data keluarga dan data lainnya dipertahankan.
 - Google Apps Script backend untuk 20 sheet dan folder Google Drive.
 - Struktur GitHub-ready dengan `.gitignore` dan GitHub Actions workflow.
 - Test logika kalkulasi keuangan, durasi, sanitasi, dan dashboard.
@@ -109,6 +110,8 @@ Repository target:
 
 `https://github.com/AbuAdzka-MDD/MrizkiIslamicFamily`
 
+Langkah mengganti Apps Script dan memperbarui GitHub Pages tersedia di [docs/UPLOAD_CHECKLIST.md](docs/UPLOAD_CHECKLIST.md). Uji di desktop dan perangkat keluarga sebelum aplikasi dipakai untuk pencatatan penting.
+
 Project Apps Script target:
 
 `https://script.google.com/u/0/home/projects/1J8DSWyRC9SB_-UEEe8nqCMrofQVVu2W1F3BLzSEvz-pRm8F-03zie0Mg/edit`
@@ -127,7 +130,7 @@ Tidak ada password, token, client secret, atau API key di source code. Nilai OAu
 4. Klik **Pratinjau / Simpan PDF**.
 5. Di dialog browser, pilih **Save as PDF**.
 
-Untuk penyimpanan Google Drive, isi URL Apps Script lalu gunakan **Simpan ke Google Drive**. Dalam demo ini backend menyimpan representasi HTML laporan/backup ke folder Drive. Produksi Flutter dapat memakai generator PDF native.
+Untuk menyimpan backup ke Google Drive, gunakan menu Pengaturan setelah login sebagai Abi. Pastikan Apps Script sudah diberi izin Google Drive.
 
 ## Build Produksi Flutter
 

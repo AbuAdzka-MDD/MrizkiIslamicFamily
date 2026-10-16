@@ -114,13 +114,6 @@ googleAppsScriptUrl: "URL_WEB_APP_APPS_SCRIPT"
 
 di `config.js`.
 
-## Login Password
+## Login dan Pembaruan
 
-Mode demo memakai setup password pertama kali di browser. Password tidak ditulis di source code dan hanya hash yang disimpan di localStorage.
-
-Untuk produksi, rekomendasi berikutnya:
-
-- Simpan hash password di sheet `User_Roles`.
-- Validasi login lewat Apps Script HTTPS.
-- Tambahkan rate limiting sederhana.
-- Tetap gunakan Google Sign-In untuk opsi login yang lebih kuat.
+Ikuti [UPLOAD_CHECKLIST.md](UPLOAD_CHECKLIST.md) untuk menyalin backend dan memperbarui branch `gh-pages`. Hash password disimpan di Script Properties Apps Script dan pemeriksaan login dilakukan server-side. Jangan memasukkan kode aktivasi awal ke repository.

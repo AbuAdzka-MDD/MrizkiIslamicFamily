@@ -43,22 +43,67 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  let requestId = '';
   try {
     const body = JSON.parse(e.postData.contents || '{}');
-    if (['authLogin', 'authProvision', 'authSetup'].includes(body.action)) {
-      const result = body.action === 'authLogin' ? authLogin_(body)
-        : body.action === 'authProvision' ? authProvision_(body) : authSetup_(body);
+    requestId = String(body.requestId || '');
+    if (['authLogin', 'authProvision', 'authSetPassword', 'accessGet', 'accessSet', 'cleanDemo', 'profilePhotoGet', 'profilePhotoSet'].includes(body.action)) {
+      const handlers = {
+        authLogin: authLogin_, authProvision: authProvision_,
+        authSetPassword: authSetPassword_, accessGet: accessGet_, accessSet: accessSet_, cleanDemo: cleanDemo_,
+        profilePhotoGet: profilePhotoGet_, profilePhotoSet: profilePhotoSet_
+      };
+      const result = handlers[body.action](body);
       if (body.requestId) CacheService.getScriptCache().put('auth:' + body.requestId, JSON.stringify(result), 45);
       return json_(result);
     }
+    const user = verifySessionToken_(body.sessionToken);
+    if (!user) {
+      if (body.requestId) CacheService.getScriptCache().put('write:' + body.requestId, JSON.stringify({ ok: false, error: 'Sesi tidak sah atau telah berakhir. Silakan login kembali.' }), 45);
+      return json_({ ok: false, error: 'Sesi tidak sah atau telah berakhir. Silakan login kembali.' });
+    }
+    if (body.requestId) {
+      const prior = CacheService.getScriptCache().get('write:' + body.requestId);
+      if (prior) return json_(JSON.parse(prior));
+    }
     const ss = getSpreadsheet_();
-    if (body.action === 'upsert') return json_(upsert_(ss, body.sheet, body.record));
-    if (body.action === 'delete') return json_(softDelete_(ss, body.sheet, body.record));
-    if (body.action === 'backup') return json_(createDriveBackup_(body));
-    if (body.action === 'init') return json_({ ok: true, spreadsheetId: ss.getId(), folderId: getReportFolder_().getId() });
-    return json_({ ok: false, error: 'Unknown action' });
+    let result;
+    if (body.action === 'upsert') {
+      result = canWrite_(user, body.sheet, body.record) ? upsert_(ss, body.sheet, body.record) : { ok: false, error: 'Akun tidak memiliki hak tulis untuk data ini.' };
+    } else if (body.action === 'delete') {
+      result = canWrite_(user, body.sheet) ? softDelete_(ss, body.sheet, body.record) : { ok: false, error: 'Akun tidak memiliki hak tulis untuk data ini.' };
+    } else if (body.action === 'syncData') {
+      validateSheet_(body.sheet);
+      const access = JSON.parse(PropertiesService.getScriptProperties().getProperty('FAMILY_ACCESS') || '{}');
+      const permissions = effectiveAccess_(user, access);
+      if (body.sheet === 'Audit_Logs' || body.sheet === 'App_Settings' || (body.sheet === 'User_Roles' && user !== 'abi') || !permissions.enabled || !permissions.modules.includes(moduleForSheet_(body.sheet))) {
+        result = { ok: false, error: 'Akun tidak memiliki hak membaca data ini.' };
+      } else {
+      const limit = Math.min(25, Math.max(1, Number(body.limit || 25)));
+      const offset = Math.max(0, Number(body.offset || 0));
+      let rows = readRows_(ss, body.sheet);
+      if (user !== 'abi' && user !== 'ummi') {
+        const memberId = 'mem_' + user;
+        rows = rows.filter(row => row.privacy !== 'private' || row.member_id === memberId);
+      }
+      const page = rows.slice(offset, offset + limit);
+      result = { ok: true, rows: page, nextOffset: offset + page.length, done: offset + page.length >= rows.length };
+      while (page.length > 1 && Utilities.newBlob(JSON.stringify(result)).getBytes().length > 85000) {
+        page.pop();
+        result.nextOffset = offset + page.length;
+        result.done = result.nextOffset >= rows.length;
+      }
+      if (Utilities.newBlob(JSON.stringify(result)).getBytes().length > 85000) result = { ok: false, error: 'Satu baris data terlalu besar untuk sinkronisasi. Ringkas catatan pada data tersebut.' };
+      }
+    } else if (body.action === 'backup') result = user === 'abi' ? createDriveBackup_(body) : { ok: false, error: 'Hanya Abi yang dapat membuat backup.' };
+    else if (body.action === 'init') result = user === 'abi' ? { ok: true, spreadsheetId: ss.getId(), folderId: getReportFolder_().getId() } : { ok: false, error: 'Hanya Abi yang dapat mengatur koneksi.' };
+    else return json_({ ok: false, error: 'Unknown action' });
+    if (body.requestId) CacheService.getScriptCache().put('write:' + body.requestId, JSON.stringify(result), result.ok ? 21600 : 45);
+    return json_(result);
   } catch (error) {
-    return json_({ ok: false, error: String(error) });
+    const result = { ok: false, error: String(error) };
+    if (requestId) CacheService.getScriptCache().put('write:' + requestId, JSON.stringify(result), 45);
+    return json_(result);
   }
 }
 
@@ -68,28 +113,202 @@ function authProvision_(body) {
   try {
     const props = PropertiesService.getScriptProperties();
     if (props.getProperty('FAMILY_AUTH')) return { ok: true, exists: true };
+    const bootstrapKey = props.getProperty('FAMILY_BOOTSTRAP_KEY');
+    if (!bootstrapKey || typeof body.bootstrapKey !== 'string' || body.bootstrapKey !== bootstrapKey) return { ok: false, error: 'Kode aktivasi awal tidak sesuai.' };
     if (!validAuthRecords_(body.users, true) || !body.users.abi) return { ok: false, error: 'Invalid password records' };
     props.setProperty('FAMILY_AUTH', JSON.stringify(body.users));
-    return { ok: true, created: true };
+    props.deleteProperty('FAMILY_BOOTSTRAP_KEY');
+    return { ok: true, created: true, sessionToken: issueSessionToken_('abi', body.users.abi) };
   } finally {
     lock.releaseLock();
   }
 }
 
-function authSetup_(body) {
+function createFamilyBootstrapKey() {
   const props = PropertiesService.getScriptProperties();
-  const users = body.users;
-  if (!validAuthRecords_(users)) return { ok: false, error: 'Invalid password records' };
-  const current = JSON.parse(props.getProperty('FAMILY_AUTH') || '{}');
-  if (!current.abi || !verifyPassword_(current.abi, body.abiPassword)) return { ok: false, error: 'Abi password is not verified' };
-  props.setProperty('FAMILY_AUTH', JSON.stringify(users));
-  return { ok: true };
+  if (props.getProperty('FAMILY_AUTH')) throw new Error('FAMILY_AUTH sudah ada. Tidak perlu aktivasi awal.');
+  let key = props.getProperty('FAMILY_BOOTSTRAP_KEY');
+  if (!key) {
+    key = Utilities.getUuid() + Utilities.getUuid();
+    props.setProperty('FAMILY_BOOTSTRAP_KEY', key);
+  }
+  Logger.log('Kode aktivasi satu kali: ' + key);
+  return key;
 }
 
 function authLogin_(body) {
   const records = JSON.parse(PropertiesService.getScriptProperties().getProperty('FAMILY_AUTH') || '{}');
+  const access = JSON.parse(PropertiesService.getScriptProperties().getProperty('FAMILY_ACCESS') || '{}');
   const record = records[body.user];
-  return { ok: Boolean(record && verifyPassword_(record, body.password)), error: record ? 'Password belum sesuai.' : 'Akun belum disiapkan oleh Abi.' };
+  if (access[body.user] && access[body.user].enabled === false) return { ok: false, error: 'Akun ini dinonaktifkan oleh Abi.' };
+  const ok = Boolean(record && verifyPassword_(record, body.password));
+  return { ok, error: record ? 'Password belum sesuai.' : 'Akun belum disiapkan oleh Abi.', sessionToken: ok ? issueSessionToken_(body.user, record) : undefined };
+}
+
+function authSetPassword_(body) {
+  if (verifySessionToken_(body.sessionToken) !== 'abi') return { ok: false, error: 'Hanya Abi yang dapat mengubah password.' };
+  if (!/^(abi|ummi|alif_aslam|muslim_ihsan|m_bilal_albana|fajri_rahman|adzkadina_salsabila)$/.test(body.user || '') || typeof body.password !== 'string' || body.password.length < 8 || body.password.length > 128) return { ok: false, error: 'Pengguna atau panjang password tidak valid.' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const records = JSON.parse(props.getProperty('FAMILY_AUTH') || '{}');
+    const salt = Utilities.getUuid() + Utilities.getUuid();
+    records[body.user] = { salt: salt, hash: hashPassword_(salt, body.password) };
+    props.setProperty('FAMILY_AUTH', JSON.stringify(records));
+    return { ok: true, sessionToken: issueSessionToken_('abi', records.abi) };
+  } finally { lock.releaseLock(); }
+}
+
+function accessGet_(body) {
+  const user = verifySessionToken_(body.sessionToken);
+  if (!user) return { ok: false, error: 'Sesi tidak sah.' };
+  const access = JSON.parse(PropertiesService.getScriptProperties().getProperty('FAMILY_ACCESS') || '{}');
+  const visible = user === 'abi' ? ['ummi', 'alif_aslam', 'muslim_ihsan', 'm_bilal_albana', 'fajri_rahman', 'adzkadina_salsabila'] : [user];
+  return { ok: true, access: Object.fromEntries(visible.map(account => [account, effectiveAccess_(account, access)])) };
+}
+
+function accessSet_(body) {
+  if (verifySessionToken_(body.sessionToken) !== 'abi') return { ok: false, error: 'Hanya Abi yang dapat mengatur hak akses.' };
+  const allowedUsers = ['ummi', 'alif_aslam', 'muslim_ihsan', 'm_bilal_albana', 'fajri_rahman', 'adzkadina_salsabila'];
+  const allowedModules = ['members', 'growth', 'daily', 'finance', 'agenda', 'quran', 'prayer', 'notifications'];
+  if (!allowedUsers.includes(body.user) || !body.account || !Array.isArray(body.account.modules) || body.account.modules.some(module => !allowedModules.includes(module))) return { ok: false, error: 'Pengaturan hak akses tidak valid.' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const access = JSON.parse(props.getProperty('FAMILY_ACCESS') || '{}');
+    access[body.user] = { enabled: body.account.enabled === true, modules: [...new Set(body.account.modules)] };
+    props.setProperty('FAMILY_ACCESS', JSON.stringify(access));
+    return { ok: true };
+  } finally { lock.releaseLock(); }
+}
+
+function cleanDemo_(body) {
+  if (verifySessionToken_(body.sessionToken) !== 'abi') return { ok: false, error: 'Hanya Abi yang dapat membersihkan data demo.' };
+  const ss = getSpreadsheet_();
+  let deleted = 0;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    Object.keys(SCHEMA).forEach(name => {
+      if (['Family_Members', 'User_Roles'].includes(name)) return;
+      const sheet = ss.getSheetByName(name);
+      if (!sheet || sheet.getLastRow() < 2) return;
+      const headers = SCHEMA[name];
+      const createdBy = headers.indexOf('created_by') + 1;
+      const updatedBy = headers.indexOf('updated_by') + 1;
+      for (let row = sheet.getLastRow(); row >= 2; row--) {
+        const author = String(sheet.getRange(row, createdBy).getValue());
+        const editor = String(sheet.getRange(row, updatedBy).getValue());
+        if (author === 'demo' || editor === 'demo') { sheet.deleteRow(row); deleted++; }
+      }
+    });
+  } finally { lock.releaseLock(); }
+  return { ok: true, deleted: deleted };
+}
+
+function canWrite_(user, sheet, record) {
+  const access = JSON.parse(PropertiesService.getScriptProperties().getProperty('FAMILY_ACCESS') || '{}');
+  const permissions = effectiveAccess_(user, access);
+  if (!permissions.enabled || !permissions.modules.includes(moduleForSheet_(sheet))) return false;
+  if (user === 'abi') return true;
+  if (user === 'ummi') return ['Family_Members', 'User_Roles', 'Family_Agendas', 'Notifications'].includes(sheet);
+  if (user === 'adzkadina_salsabila') return false;
+  if (!record || record.member_id !== 'mem_' + user) return false;
+  return ['Spiritual_Logs', 'Emotional_Logs', 'Intellectual_Logs', 'Daily_Activities', 'Quran_Progress'].includes(sheet);
+}
+
+function effectiveAccess_(user, configured) {
+  if (user === 'abi') return { enabled: true, modules: ['members', 'growth', 'daily', 'finance', 'agenda', 'quran', 'prayer', 'reports', 'notifications'] };
+  const defaults = user === 'ummi'
+    ? ['members', 'growth', 'agenda', 'quran', 'prayer', 'notifications']
+    : ['growth', 'daily', 'quran', 'prayer'];
+  const saved = configured[user];
+  return saved ? { enabled: saved.enabled === true, modules: saved.modules || defaults } : { enabled: true, modules: defaults };
+}
+
+function moduleForSheet_(sheet) {
+  if (sheet === 'Family_Members' || sheet === 'User_Roles') return 'members';
+  if (sheet.indexOf('Spiritual_') === 0 || sheet.indexOf('Emotional_') === 0 || sheet.indexOf('Intellectual_') === 0) return 'growth';
+  if (sheet === 'Daily_Activities') return 'daily';
+  if (['Income', 'Expenses', 'Savings', 'Investments', 'Financial_Goals'].includes(sheet)) return 'finance';
+  if (sheet === 'Family_Agendas') return 'agenda';
+  if (sheet === 'Quran_Progress') return 'quran';
+  if (sheet === 'Prayer_Settings') return 'prayer';
+  if (sheet === 'Notifications') return 'notifications';
+  return 'reports';
+}
+
+function issueSessionToken_(user, record) {
+  const props = PropertiesService.getScriptProperties();
+  let secret = props.getProperty('FAMILY_SESSION_SECRET');
+  if (!secret) {
+    secret = Utilities.getUuid() + Utilities.getUuid();
+    props.setProperty('FAMILY_SESSION_SECRET', secret);
+  }
+  const payload = user + '|' + (Date.now() + 90 * 24 * 60 * 60 * 1000) + '|' + record.hash;
+  const signature = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(payload, secret));
+  return Utilities.base64EncodeWebSafe(payload) + '.' + signature;
+}
+
+function verifySessionToken_(token) {
+  try {
+    const parts = String(token || '').split('.');
+    if (parts.length !== 2) return null;
+    const payload = Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString();
+    const fields = payload.split('|');
+    if (fields.length !== 3 || Number(fields[1]) < Date.now()) return null;
+    const user = fields[0];
+    const access = JSON.parse(PropertiesService.getScriptProperties().getProperty('FAMILY_ACCESS') || '{}');
+    if (access[user] && access[user].enabled === false) return null;
+    const auth = JSON.parse(PropertiesService.getScriptProperties().getProperty('FAMILY_AUTH') || '{}');
+    const record = auth[user];
+    const secret = PropertiesService.getScriptProperties().getProperty('FAMILY_SESSION_SECRET');
+    if (!record || !secret || record.hash !== fields[2]) return null;
+    const expected = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(payload, secret));
+    return expected === parts[1] ? user : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function profilePhotoGet_(body) {
+  const user = verifySessionToken_(body.sessionToken);
+  if (!user || user !== body.user) return { ok: false, error: 'Sesi sudah tidak berlaku. Silakan login kembali.' };
+  const props = PropertiesService.getScriptProperties();
+  const key = 'PROFILE_PHOTO_' + user;
+  const fileId = props.getProperty(key);
+  if (!fileId) return { ok: true, photoData: '', sessionToken: issueSessionToken_(user, JSON.parse(props.getProperty('FAMILY_AUTH'))[user]) };
+  try {
+    const blob = DriveApp.getFileById(fileId).getBlob();
+    return { ok: true, photoData: 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes()), sessionToken: issueSessionToken_(user, JSON.parse(props.getProperty('FAMILY_AUTH'))[user]) };
+  } catch (error) {
+    props.deleteProperty(key);
+    return { ok: true, photoData: '', sessionToken: issueSessionToken_(user, JSON.parse(props.getProperty('FAMILY_AUTH'))[user]) };
+  }
+}
+
+function profilePhotoSet_(body) {
+  const user = verifySessionToken_(body.sessionToken);
+  if (!user || user !== body.user) return { ok: false, error: 'Sesi sudah tidak berlaku. Silakan login kembali.' };
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(body.photoData || ''));
+  if (!match || body.photoData.length > 70000) return { ok: false, error: 'Foto tidak valid atau ukurannya terlalu besar.' };
+  const props = PropertiesService.getScriptProperties();
+  const key = 'PROFILE_PHOTO_' + user;
+  const previousId = props.getProperty(key);
+  const bytes = Utilities.base64Decode(match[2]);
+  const blob = Utilities.newBlob(bytes, match[1], 'profile-' + user + '.jpg');
+  const file = getProfilePhotoFolder_().createFile(blob);
+  props.setProperty(key, file.getId());
+  if (previousId) {
+    try { DriveApp.getFileById(previousId).setTrashed(true); } catch (error) { /* The old photo may already be deleted. */ }
+  }
+  return { ok: true, sessionToken: issueSessionToken_(user, JSON.parse(props.getProperty('FAMILY_AUTH'))[user]) };
+}
+
+function getProfilePhotoFolder_() {
+  return getOrCreateFolder_(getOrCreateFolder_(DriveApp.getRootFolder(), DRIVE_ROOT), 'Foto Profil');
 }
 
 function validAuthRecords_(users, allowAbiBootstrap) {
@@ -106,20 +325,36 @@ function verifyPassword_(record, password) {
   return hash === record.hash;
 }
 
+function hashPassword_(salt, password) {
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + ':' + password, Utilities.Charset.UTF_8);
+  return digest.map(byte => ('0' + ((byte + 256) % 256).toString(16)).slice(-2)).join('');
+}
+
 function authResult_(params) {
   const callback = String(params.callback || '').replace(/[^\w$.]/g, '');
   const requestId = String(params.requestId || '').replace(/[^\w-]/g, '');
-  const result = CacheService.getScriptCache().get('auth:' + requestId);
+  const cache = CacheService.getScriptCache();
+  const result = cache.get('auth:' + requestId) || cache.get('write:' + requestId);
   const payload = result ? JSON.parse(result) : { pending: true };
   return ContentService.createTextOutput(callback + '(' + JSON.stringify(payload) + ');').setMimeType(ContentService.MimeType.JAVASCRIPT);
 }
 
 function getSpreadsheet_() {
-  const files = DriveApp.getFilesByName(SPREADSHEET_NAME);
-  const ss = files.hasNext() ? SpreadsheetApp.open(files.next()) : SpreadsheetApp.create(SPREADSHEET_NAME);
-  ensureSheets_(ss);
-  ensureDriveStructure_();
-  return ss;
+  const props = PropertiesService.getScriptProperties();
+  const storedId = props.getProperty('FAMILY_SPREADSHEET_ID');
+  if (storedId) return SpreadsheetApp.openById(storedId);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const existingId = props.getProperty('FAMILY_SPREADSHEET_ID');
+    if (existingId) return SpreadsheetApp.openById(existingId);
+    const files = DriveApp.getFilesByName(SPREADSHEET_NAME);
+    const ss = files.hasNext() ? SpreadsheetApp.open(files.next()) : SpreadsheetApp.create(SPREADSHEET_NAME);
+    ensureSheets_(ss);
+    ensureDriveStructure_();
+    props.setProperty('FAMILY_SPREADSHEET_ID', ss.getId());
+    return ss;
+  } finally { lock.releaseLock(); }
 }
 
 function ensureSheets_(ss) {
@@ -137,6 +372,10 @@ function ensureSheets_(ss) {
 }
 
 function upsert_(ss, sheetName, record) {
+  if (JSON.stringify(record).length > 15000) return { ok: false, error: 'Isian terlalu panjang. Ringkas catatan dan coba simpan kembali.' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
   validateSheet_(sheetName);
   const sheet = ss.getSheetByName(sheetName);
   const headers = SCHEMA[sheetName];
@@ -144,13 +383,25 @@ function upsert_(ss, sheetName, record) {
   const ids = sheet.getLastRow() > 1 ? sheet.getRange(2, idCol, sheet.getLastRow() - 1, 1).getValues().flat() : [];
   const id = sanitize_(record.id || Utilities.getUuid());
   record.id = id;
+  const found = ids.indexOf(id);
+  if (found >= 0 && record.base_updated_at) {
+    const updatedColumn = headers.indexOf('updated_at') + 1;
+    const currentRow = sheet.getRange(found + 2, 1, 1, headers.length).getValues()[0];
+    const currentValue = currentRow[updatedColumn - 1];
+    const currentUpdatedAt = currentValue instanceof Date ? currentValue.toISOString() : String(currentValue);
+    if (currentUpdatedAt !== String(record.base_updated_at)) {
+      const current = Object.fromEntries(headers.map((header, index) => [header, currentRow[index] instanceof Date ? currentRow[index].toISOString() : currentRow[index]]));
+      return { ok: false, conflict: true, current: current, error: 'Record changed on another device' };
+    }
+  }
+  delete record.base_updated_at;
   record.updated_at = new Date().toISOString();
   const row = headers.map(header => sanitize_(record[header]));
-  const found = ids.indexOf(id);
   if (found >= 0) sheet.getRange(found + 2, 1, 1, headers.length).setValues([row]);
   else sheet.appendRow(row);
   audit_(ss, record.family_id, record.member_id, record.member_name, 'upsert', sheetName, record);
   return { ok: true, id };
+  } finally { lock.releaseLock(); }
 }
 
 function softDelete_(ss, sheetName, record) {

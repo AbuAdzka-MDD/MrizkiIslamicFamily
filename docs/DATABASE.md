@@ -37,4 +37,6 @@ Sheet `User_Roles` juga menyiapkan kolom:
 
 `password_hash`, `password_salt`, `last_login_at`.
 
-Mode demo saat ini menyimpan hash password di localStorage agar aplikasi bisa langsung dipakai tanpa kredensial Google. Pada produksi, hash dan salt dapat disinkronkan ke `User_Roles` melalui Apps Script HTTPS, tanpa menyimpan password asli.
+Hash dan salt password disimpan pada Script Properties Apps Script (`FAMILY_AUTH`), bukan di `User_Roles` atau berkas publik. Browser hanya menyimpan sesi bertanda tangan untuk melanjutkan login antar-refresh. Sesi ditolak setelah password pengguna berubah atau akun dinonaktifkan.
+
+Pengaturan modul per akun disimpan sebagai `FAMILY_ACCESS`. Penyimpanan baris menggunakan ID stabil dan `requestId` untuk retry idempotent; perubahan pada baris yang telah berubah di perangkat lain ditolak sebagai konflik agar tidak menimpa diam-diam.

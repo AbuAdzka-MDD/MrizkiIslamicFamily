@@ -155,30 +155,22 @@ export function seedData(now = new Date()) {
       base("User_Roles", { id: "role_adzkadina_salsabila", member_id: "mem_adzkadina_salsabila", member_name: "Adzkadina Salsabila", email: "", app_role: "adzkadina_salsabila", permissions: "Akun pendamping yang dikelola orangtua (Abi dan Ummi)", date })
     ],
     Spiritual_Programs: [],
-    Spiritual_Logs: [
-      base("Spiritual_Logs", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, program_name: "Sholat Subuh", target: "Tepat waktu", realization: "Sudah", status: "Selesai", privacy: "private" })
-    ],
+    Spiritual_Logs: [],
     Emotional_Programs: [],
-    Emotional_Logs: [
-      base("Emotional_Logs", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, activity: "Quality time keluarga", duration_minutes: 45, status: "Selesai", gratitude_note: "Alhamdulillah keluarga sehat." })
-    ],
+    Emotional_Logs: [],
     Intellectual_Programs: [],
-    Intellectual_Logs: [
-      base("Intellectual_Logs", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, activity: "Membaca buku", category: "Pengembangan diri", progress: 65 })
-    ],
-    Daily_Activities: [
-      base("Daily_Activities", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, activity: "Evaluasi harian", category: "Keluarga", start_time: "21:00", end_time: "21:30", duration_minutes: 30, priority: "Tinggi", status: "Selesai" })
-    ],
-    Income: [base("Income", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, category: "Pendapatan rutin", description: "Contoh pendapatan", amount: 10000000 })],
-    Expenses: [base("Expenses", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, category: "Rumah tangga", description: "Contoh pengeluaran", amount: 3500000 })],
-    Savings: [base("Savings", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, category: "Dana darurat", amount: 2500000 })],
-    Investments: [base("Investments", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, category: "Investasi syariah", amount: 1000000 })],
-    Financial_Goals: [base("Financial_Goals", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, goal_name: "Dana Darurat", target_amount: 30000000, current_amount: 2500000 })],
-    Family_Agendas: [base("Family_Agendas", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, agenda_title: "Kajian keluarga", status: "Direncanakan" })],
-    Quran_Progress: [base("Quran_Progress", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, surah: "Al-Fatihah", pages_read: 2, verses_memorized: 7, last_read: "Al-Fatihah: 7" })],
-    Prayer_Settings: [base("Prayer_Settings", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, location: "Jakarta, Indonesia", method: "Kementerian Agama RI", qibla_degree: 295 })],
+    Intellectual_Logs: [],
+    Daily_Activities: [],
+    Income: [],
+    Expenses: [],
+    Savings: [],
+    Investments: [],
+    Financial_Goals: [],
+    Family_Agendas: [],
+    Quran_Progress: [],
+    Prayer_Settings: [],
     Notifications: [],
-    App_Settings: [base("App_Settings", { member_id: "mem_abi", member_name: "Kepala Keluarga", date, setting_key: "demo_mode", setting_value: "true" })],
+    App_Settings: [],
     Audit_Logs: []
   };
 }
@@ -194,8 +186,8 @@ export function base(sheet, values = {}) {
     created_at: values.created_at || now,
     updated_at: values.updated_at || now,
     status_data: values.status_data || "active",
-    created_by: values.created_by || "demo",
-    updated_by: values.updated_by || "demo",
+    created_by: values.created_by || "system",
+    updated_by: values.updated_by || "system",
     ...values
   };
 }

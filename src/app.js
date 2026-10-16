@@ -15,6 +15,8 @@ const queueKey = `${config.familyId}:offlineQueue:v3`;
 const authKey = `${config.familyId}:auth:v1`;
 const sessionKey = `${config.familyId}:session:v1`;
 const profilePhotoKey = `${config.familyId}:profilePhotos:v1`;
+const cloudSessionKey = `${config.familyId}:cloudSession:v1`;
+const accessKey = `${config.familyId}:access:v1`;
 const quranCacheKey = `${config.familyId}:quranCache:v2`;
 const prayerLocationKey = `${config.familyId}:prayerLocation:v1`;
 let state = loadData();
@@ -23,6 +25,8 @@ let editing = null;
 let deferredInstall = null;
 let prayerState = null;
 let quranAudio = null;
+let familyAccess = loadFamilyAccess();
+let isSyncing = false;
 
 const LOGIN_USERS = [
   ["abi", "Kepala Keluarga (Abi)"],
@@ -42,6 +46,15 @@ const ACTIVE_ROLE_MEMBER = {
   m_bilal_albana: "mem_m_bilal_albana",
   fajri_rahman: "mem_fajri_rahman",
   adzkadina_salsabila: "mem_adzkadina_salsabila"
+};
+
+const DEFAULT_ACCESS_MODULES = {
+  ummi: ["members", "growth", "agenda", "quran", "prayer", "notifications"],
+  alif_aslam: ["growth", "daily", "quran", "prayer"],
+  muslim_ihsan: ["growth", "daily", "quran", "prayer"],
+  m_bilal_albana: ["growth", "daily", "quran", "prayer"],
+  fajri_rahman: ["growth", "daily", "quran", "prayer"],
+  adzkadina_salsabila: ["growth", "daily", "quran", "prayer"]
 };
 
 const navItems = [
@@ -241,6 +254,7 @@ function init() {
   initPrayerLocation();
   tickIslamicWidget();
   setInterval(tickIslamicWidget, 1000);
+  setInterval(() => { if (navigator.onLine && localStorage.getItem(sessionKey)) syncFamilyData(); }, 180000);
   window.addEventListener("resize", drawCharts);
   renderAll();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./service-worker.js").catch(() => {});
@@ -251,11 +265,9 @@ function init() {
 function initAuth() {
   const loginUser = document.getElementById("loginUser");
   loginUser.innerHTML = LOGIN_USERS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
-  renderPasswordSetupFields();
 
   document.getElementById("loginForm").addEventListener("submit", handleLogin);
   document.getElementById("togglePasswordBtn")?.addEventListener("click", togglePasswordVisibility);
-  document.getElementById("setupForm")?.addEventListener("submit", handlePasswordSetup);
   document.getElementById("logoutBtn").addEventListener("click", logout);
   document.getElementById("profilePhotoInput")?.addEventListener("change", handleProfilePhoto);
 
@@ -264,39 +276,35 @@ function initAuth() {
   else document.getElementById("loginForm").hidden = false;
 }
 
-function renderPasswordSetupFields() {
-  const setupFields = document.getElementById("setupFields");
-  if (!setupFields) return;
-  setupFields.innerHTML = LOGIN_USERS.map(([value, label]) => `
-    <label>${label}
-      <input name="${value}" type="password" autocomplete="new-password" minlength="4" required placeholder="Minimal 4 karakter">
-    </label>`).join("");
-}
-
 async function handlePasswordSetup(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  if (form.dataset.submitting === "true") return;
+  const user = form.elements.account.value;
+  const password = form.elements.password.value;
   const status = form.querySelector(".status-line");
-  const auth = {};
-  for (const [user] of LOGIN_USERS) {
-    const password = form.elements[user].value;
-    if (password.length < 4) return;
-    auth[user] = await createPasswordRecord(password);
-  }
-  const abiPassword = prompt("Masukkan password Abi yang sedang digunakan untuk mengonfirmasi perubahan:");
-  if (!abiPassword) return;
-  try {
-    const result = await sendAuthRequest({ action: "authSetup", users: auth, abiPassword });
-    if (!result.ok) throw new Error(result.error || "Pengaturan password gagal.");
-  } catch (error) {
-    if (status) status.textContent = `${error.message} Password belum diubah.`;
+  if (localStorage.getItem(sessionKey) !== "abi" || password.length < 8) {
+    status.textContent = "Hanya Abi yang dapat mengubah password. Gunakan minimal 8 karakter.";
     return;
   }
-  localStorage.setItem(authKey, JSON.stringify(auth));
-  localStorage.setItem(sessionKey, "abi");
-  if (status) status.textContent = "Password keluarga berhasil disimpan. Gunakan password baru saat login berikutnya.";
-  form.reset();
-  unlockApp("abi");
+  form.dataset.submitting = "true";
+  const button = form.querySelector('[type="submit"]');
+  if (button) button.disabled = true;
+  try {
+    const result = await sendAuthRequest({ action: "authSetPassword", user, password, sessionToken: localStorage.getItem(cloudSessionKey) });
+    if (!result.ok) throw new Error(result.error || "Pengaturan password gagal.");
+    saveCloudSession(result);
+    const auth = loadAuth() || {};
+    auth[user] = await createPasswordRecord(password);
+    localStorage.setItem(authKey, JSON.stringify(auth));
+    status.textContent = `Password ${LOGIN_USERS.find(([id]) => id === user)?.[1] || user} berhasil diperbarui.`;
+    form.reset();
+  } catch (error) {
+    status.textContent = `${error.message} Password belum diubah.`;
+  } finally {
+    form.dataset.submitting = "false";
+    if (button) button.disabled = false;
+  }
 }
 
 async function handleLogin(event) {
@@ -309,6 +317,7 @@ async function handleLogin(event) {
   try {
     const cloud = await sendAuthRequest({ action: "authLogin", user, password });
     if (cloud.ok) {
+      saveCloudSession(cloud);
       localStorage.setItem(sessionKey, user);
       status.textContent = "";
       unlockApp(user);
@@ -330,8 +339,14 @@ async function handleLogin(event) {
       } else {
         recordsToProvision = { abi: await createPasswordRecord(password) };
       }
-      const provision = await sendAuthRequest({ action: "authProvision", users: recordsToProvision });
+      const bootstrapKey = prompt("Kode aktivasi satu kali dari Script Properties Apps Script:");
+      if (!bootstrapKey) {
+        status.textContent = "Aktivasi awal memerlukan kode satu kali dari pengelola Apps Script.";
+        return;
+      }
+      const provision = await sendAuthRequest({ action: "authProvision", users: recordsToProvision, bootstrapKey });
       if (provision.created) {
+        saveCloudSession(provision);
         localStorage.setItem(sessionKey, user);
         unlockApp(user);
         return;
@@ -339,6 +354,7 @@ async function handleLogin(event) {
       if (provision.exists) {
         const retry = await sendAuthRequest({ action: "authLogin", user, password });
         if (retry.ok) {
+          saveCloudSession(retry);
           localStorage.setItem(sessionKey, user);
           unlockApp(user);
           return;
@@ -354,15 +370,21 @@ async function handleLogin(event) {
 }
 
 async function sendAuthRequest(payload) {
+  return sendCloudRequest(payload);
+}
+
+async function sendCloudRequest(payload) {
   if (!config.googleAppsScriptUrl || !navigator.onLine) throw new Error("Koneksi ke server login tidak tersedia.");
-  const requestId = crypto.randomUUID();
+  const requestId = createRequestId();
   await fetch(config.googleAppsScriptUrl, {
     method: "POST",
     mode: "no-cors",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify({ ...payload, requestId })
   });
-  return pollAuthResult(requestId);
+  const result = await pollAuthResult(requestId);
+  saveCloudSession(result);
+  return result;
 }
 
 function pollAuthResult(requestId) {
@@ -408,12 +430,42 @@ function unlockApp(user) {
   const roleSelect = document.getElementById("roleSelect");
   roleSelect.value = user;
   roleSelect.disabled = true;
+  restrictStateForUser(user);
   updateDashboardProfile(user);
+  loadCloudProfilePhoto(user);
   renderNav(user);
   if (!canAccess(user, "all") && ["reports", "settings"].some(id => document.getElementById(id).classList.contains("active"))) {
     showView("dashboard");
   }
   renderAll();
+  if (navigator.onLine && localStorage.getItem(cloudSessionKey)) {
+    loadAccessSettings();
+    if (user === "abi") cleanDemoData(true).finally(syncFamilyData);
+    else syncFamilyData();
+  }
+}
+
+function saveCloudSession(result) {
+  if (result.sessionToken) localStorage.setItem(cloudSessionKey, result.sessionToken);
+}
+
+async function loadCloudProfilePhoto(user) {
+  const token = localStorage.getItem(cloudSessionKey);
+  if (!token || !navigator.onLine) return;
+  try {
+    const result = await sendAuthRequest({ action: "profilePhotoGet", user, sessionToken: token });
+    if (!result.ok) return;
+    if (result.photoData) {
+      const photos = loadProfilePhotos();
+      photos[user] = result.photoData;
+      localStorage.setItem(profilePhotoKey, JSON.stringify(photos));
+      const image = document.getElementById("dashboardProfilePhoto");
+      if (image && localStorage.getItem(sessionKey) === user) image.src = result.photoData;
+    } else {
+      const localPhoto = loadProfilePhotos()[user];
+      if (localPhoto) await sendAuthRequest({ action: "profilePhotoSet", user, sessionToken: token, photoData: localPhoto });
+    }
+  } catch { /* Keep the locally saved photo available while the cloud is offline. */ }
 }
 
 function updateDashboardProfile(user) {
@@ -450,6 +502,7 @@ async function handleProfilePhoto(event) {
   const status = document.getElementById("profilePhotoStatus");
   const previewUrl = URL.createObjectURL(file);
   if (image) image.src = previewUrl;
+  let savedOnDevice = false;
   try {
     const decodedImage = new Image();
     await new Promise((resolve, reject) => {
@@ -458,16 +511,22 @@ async function handleProfilePhoto(event) {
       decodedImage.src = previewUrl;
     });
     const canvas = document.createElement("canvas");
-    const scale = Math.min(1, 512 / Math.max(decodedImage.width, decodedImage.height));
+    const scale = Math.min(1, 384 / Math.max(decodedImage.width, decodedImage.height));
     canvas.width = Math.round(decodedImage.width * scale);
     canvas.height = Math.round(decodedImage.height * scale);
     canvas.getContext("2d").drawImage(decodedImage, 0, 0, canvas.width, canvas.height);
     const photos = loadProfilePhotos();
-    photos[user] = canvas.toDataURL("image/jpeg", 0.82);
+    photos[user] = canvas.toDataURL("image/jpeg", 0.72);
     localStorage.setItem(profilePhotoKey, JSON.stringify(photos));
-    if (status) status.textContent = "Foto profil tersimpan";
+    savedOnDevice = true;
+    const token = localStorage.getItem(cloudSessionKey);
+    if (token && navigator.onLine) {
+      const result = await sendAuthRequest({ action: "profilePhotoSet", user, sessionToken: token, photoData: photos[user] });
+      if (!result.ok) throw new Error(result.error || "Sinkronisasi foto gagal.");
+      if (status) status.textContent = "Foto tersimpan dan tersinkron";
+    } else if (status) status.textContent = "Foto tersimpan di perangkat ini; login ulang untuk sinkronisasi.";
   } catch {
-    if (status) status.textContent = "Foto gagal disimpan. Coba JPG, PNG, atau WebP yang lebih kecil.";
+    if (status) status.textContent = savedOnDevice ? "Foto tersimpan di perangkat, tetapi gagal disinkronkan." : "Foto gagal disimpan. Coba JPG, PNG, atau WebP yang lebih kecil.";
   }
   input.value = "";
 }
@@ -479,6 +538,7 @@ function loadProfilePhotos() {
 
 function logout() {
   localStorage.removeItem(sessionKey);
+  localStorage.removeItem(cloudSessionKey);
   document.body.classList.add("auth-locked");
   document.body.classList.remove("auth-ready");
   document.getElementById("loginPassword").value = "";
@@ -486,17 +546,9 @@ function logout() {
   document.getElementById("loginForm").hidden = false;
 }
 
-function resetPasswords() {
-  if (!confirm("Reset password keluarga di perangkat ini? Setelah itu Abi perlu mengisi ulang password dari menu Pengaturan.")) return;
-  localStorage.removeItem(authKey);
-  localStorage.removeItem(sessionKey);
-  const setupForm = document.getElementById("setupForm");
-  if (setupForm) {
-    setupForm.reset();
-    setupForm.querySelector(".status-line").textContent = "Password lama sudah dihapus. Isi ulang semua password keluarga lalu simpan.";
-  } else {
-    logout();
-  }
+function loadFamilyAccess() {
+  try { return JSON.parse(localStorage.getItem(accessKey) || "{}"); }
+  catch { return {}; }
 }
 
 function loadAuth() {
@@ -528,13 +580,35 @@ function renderNav(role = document.getElementById("roleSelect")?.value || "abi")
 }
 
 function allowedNavItems(role) {
-  if (canAccess(role, "all")) return navItems;
-  return navItems.filter(([id]) => !["reports", "settings"].includes(id));
+  return navItems.filter(([id]) => isModuleAllowed(role, id));
+}
+
+function isModuleAllowed(user, moduleId) {
+  const account = familyAccess[user];
+  if (account?.enabled === false) return false;
+  if (moduleId === "dashboard") return true;
+  if (canAccess(user, "all")) return true;
+  if (["reports", "settings"].includes(moduleId)) return false;
+  const modules = Array.isArray(account?.modules) ? account.modules : DEFAULT_ACCESS_MODULES[user] || [];
+  return modules.includes(moduleId);
+}
+
+function restrictStateForUser(user) {
+  const memberId = ACTIVE_ROLE_MEMBER[user];
+  for (const sheet of SHEETS) {
+    if (!isModuleAllowed(user, moduleForLocalSheet(sheet))) {
+      state[sheet] = [];
+      continue;
+    }
+    if (!canAccess(user, "all") && user !== "ummi") {
+      state[sheet] = (state[sheet] || []).filter(row => row.privacy !== "private" || row.member_id === memberId);
+    }
+  }
 }
 
 function showView(id) {
   const role = document.getElementById("roleSelect")?.value || "abi";
-  if (!canAccess(role, "all") && ["reports", "settings"].includes(id)) id = "dashboard";
+  if (!isModuleAllowed(role, id)) id = "dashboard";
   document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === id));
   document.querySelectorAll("[data-view]").forEach(button => button.classList.toggle("active", button.dataset.view === id));
   const item = navItems.find(([viewId]) => viewId === id);
@@ -596,8 +670,12 @@ function buildViews() {
   document.getElementById("reports").innerHTML = reportsTemplate();
   document.getElementById("settings").innerHTML = settingsTemplate();
   document.querySelectorAll("form[data-sheet]").forEach(form => form.addEventListener("submit", handleSubmit));
-  document.querySelectorAll("[data-reset-demo]").forEach(button => button.addEventListener("click", resetDemo));
-  document.querySelectorAll("[data-reset-passwords]").forEach(button => button.addEventListener("click", resetPasswords));
+  document.getElementById("setupForm")?.addEventListener("submit", handlePasswordSetup);
+  document.getElementById("accessForm")?.addEventListener("submit", handleAccessSave);
+  document.getElementById("accessUser")?.addEventListener("change", renderAccessModules);
+  document.querySelector("[data-clean-demo]")?.addEventListener("click", cleanDemoData);
+  document.getElementById("syncConflicts")?.addEventListener("click", resolveQueuedConflict);
+  renderAccessModules();
   document.querySelectorAll("[data-export-json]").forEach(button => button.addEventListener("click", exportJson));
   document.querySelectorAll("[data-backup]").forEach(button => button.addEventListener("click", backupToDrive));
 }
@@ -710,7 +788,7 @@ function reportsTemplate() {
   return `
     <div class="panel">
       <h3>Laporan dan Verifikasi</h3>
-      <p class="tagline">Filter laporan bekerja dari data demo maupun data Google Sheets setelah backend aktif. PDF dicetak dari layout dashboard khusus agar kartu statistik, grafik, dan tabel tidak terpotong.</p>
+      <p class="tagline">Laporan disusun dari data keluarga yang tercatat. PDF dicetak dari layout dashboard agar kartu, grafik, dan tabel mudah dibaca.</p>
       <div class="table-wrap"><table id="reportTable"></table></div>
     </div>`;
 }
@@ -720,9 +798,10 @@ function settingsTemplate() {
     <div class="grid two">
       <div class="panel">
         <h3>Konfigurasi Aman</h3>
+        <p class="status-line" id="syncStatus">Data terbaru diperiksa setelah login.</p>
         <table><tbody>
           <tr><th>Workspace owner</th><td>${config.workspaceOwner}</td></tr>
-          <tr><th>Apps Script URL</th><td>${config.googleAppsScriptUrl || "Belum diisi, mode demo lokal"}</td></tr>
+          <tr><th>Apps Script URL</th><td>${config.googleAppsScriptUrl ? "Terhubung" : "Belum dikonfigurasi"}</td></tr>
           <tr><th>Google Client ID</th><td>${config.googleClientId ? "Diisi melalui config/env" : "Belum diisi"}</td></tr>
           <tr><th>Offline queue</th><td id="queueCount">${queue.length} item</td></tr>
         </tbody></table>
@@ -732,16 +811,24 @@ function settingsTemplate() {
         <div class="form-actions" style="justify-content:flex-start; flex-wrap:wrap">
           <button class="btn" data-export-json>Export JSON</button>
           <button class="btn" data-backup>Backup ke Google Drive</button>
-          <button class="btn" data-reset-passwords>Reset Password</button>
-          <button class="btn danger" data-reset-demo>Reset Demo</button>
+          <button class="btn" data-clean-demo>Bersihkan Baris Demo</button>
         </div>
         <p class="status-line">Tidak ada password, token, client secret, atau API key di source code.</p>
       </div>
       <form class="panel" id="setupForm">
-        <h3>Setup Password Keluarga</h3>
-        <div id="setupFields" class="setup-fields"></div>
-        <button class="btn primary" type="submit">Simpan Password Keluarga</button>
-        <p class="status-line">Menu ini hanya tersedia untuk Kepala Keluarga (Abi) melalui Pengaturan.</p>
+        <h3>Password Per Pengguna</h3>
+        <label>Pengguna<select name="account">${LOGIN_USERS.map(([id, name]) => `<option value="${id}">${escapeHtml(name)}</option>`).join("")}</select></label>
+        <label>Password baru<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
+        <button class="btn primary" type="submit">Simpan Password Pengguna</button>
+        <p class="status-line">Mengubah password satu pengguna tidak mengubah password anggota lain.</p>
+      </form>
+      <form class="panel" id="accessForm">
+        <h3>Hak Akses Pengguna</h3>
+        <label>Pengguna<select id="accessUser" name="account">${LOGIN_USERS.filter(([id]) => id !== "abi").map(([id, name]) => `<option value="${id}">${escapeHtml(name)}</option>`).join("")}</select></label>
+        <label><input type="checkbox" name="enabled" checked> Akun aktif</label>
+        <div id="accessModules" class="form-grid"></div>
+        <button class="btn primary" type="submit">Simpan Hak Akses</button>
+        <p class="status-line">Hak akses disimpan untuk akun terpilih.</p>
       </form>
     </div>`;
 }
@@ -749,23 +836,40 @@ function settingsTemplate() {
 async function handleSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  if (form.dataset.submitting === "true") return;
   const sheet = form.dataset.sheet;
   const role = document.getElementById("roleSelect").value;
+  const statusLine = form.querySelector(".status-line");
+  if ((!navigator.onLine || !config.googleAppsScriptUrl) && queue.length >= 500) {
+    statusLine.textContent = "Antrean 500 data sudah penuh. Sinkronkan data sebelum menambah lagi.";
+    return;
+  }
   if (!canWriteSheet(role, sheet)) {
-    form.querySelector(".status-line").textContent = "Role demo ini tidak memiliki izin menyimpan modul tersebut.";
+    form.querySelector(".status-line").textContent = "Akun ini tidak memiliki izin menyimpan data pada modul tersebut.";
     return;
   }
   const payload = Object.fromEntries(new FormData(form).entries());
   Object.keys(payload).forEach(key => payload[key] = sanitizeText(payload[key]));
+  if (!['abi', 'ummi'].includes(role) && ACTIVE_ROLE_MEMBER[role]) {
+    const member = state.Family_Members.find(row => row.member_id === ACTIVE_ROLE_MEMBER[role]);
+    payload.member_name = dashboardUserName(role, member);
+  }
   if (sheet === "Daily_Activities" && payload.start_time && payload.end_time) {
     payload.duration_minutes = calculateDuration(payload.start_time, payload.end_time);
   }
+  const duplicate = findLikelyDuplicate(sheet, payload);
+  if (duplicate && !confirm("Ada catatan serupa untuk anggota dan tanggal yang sama. Tetap simpan sebagai catatan terpisah?")) return;
   const record = base(sheet, {
     ...payload,
-    member_id: findMemberId(payload.member_name),
+    member_id: !['abi', 'ummi'].includes(role) && ACTIVE_ROLE_MEMBER[role] ? ACTIVE_ROLE_MEMBER[role] : findMemberId(payload.member_name),
     created_by: activeActor(),
     updated_by: activeActor()
   });
+  const previousRecord = editing && editing.sheet === sheet ? state[sheet].find(row => row.id === editing.id) : null;
+  if (previousRecord) record.base_updated_at = previousRecord.updated_at;
+  form.dataset.submitting = "true";
+  const submitButton = form.querySelector('[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
   if (editing && editing.sheet === sheet) {
     const index = state[sheet].findIndex(row => row.id === editing.id);
     state[sheet][index] = { ...state[sheet][index], ...record, id: editing.id, created_at: state[sheet][index].created_at, updated_at: new Date().toISOString() };
@@ -775,18 +879,65 @@ async function handleSubmit(event) {
   }
   audit("upsert", sheet, record);
   saveData();
-  await enqueueOrSend({ action: "upsert", sheet, record });
-  form.reset();
-  setDefaultDates();
-  form.querySelector(".status-line").textContent = "Data tersimpan. Dashboard diperbarui otomatis.";
+  let writeError = "";
+  try {
+    await enqueueOrSend({ action: "upsert", sheet, record });
+  } catch (error) {
+    writeError = error.message;
+    if (!queue.some(item => item.record?.id === record.id)) {
+      if (previousRecord) state[sheet] = state[sheet].map(row => row.id === previousRecord.id ? previousRecord : row);
+      else state[sheet] = state[sheet].filter(row => row.id !== record.id);
+      saveData();
+    }
+    if (error.conflict) {
+      editing = { sheet, id: record.id };
+      syncFamilyData();
+    }
+  } finally {
+    form.dataset.submitting = "false";
+    if (submitButton) submitButton.disabled = false;
+  }
+  if (!writeError.startsWith("Konflik:")) {
+    form.reset();
+    setDefaultDates();
+  }
+  statusLine.textContent = writeError || (queue.some(item => item.record?.id === record.id)
+    ? "Data tersimpan di perangkat dan menunggu sinkronisasi."
+    : "Data tersinkron ke Google Sheets. Dashboard diperbarui.");
   renderAll();
 }
 
 function canWriteSheet(role, sheet) {
+  if (!isModuleAllowed(role, moduleForLocalSheet(sheet))) return false;
   if (canAccess(role, "all")) return true;
   if (role === "ummi") return ["Family_Members", "User_Roles", "Family_Agendas", "Notifications"].includes(sheet);
   if (role === "adzkadina_salsabila") return false;
   return ["Spiritual_Logs", "Emotional_Logs", "Intellectual_Logs", "Daily_Activities", "Quran_Progress"].includes(sheet);
+}
+
+function findLikelyDuplicate(sheet, payload) {
+  const keys = {
+    Daily_Activities: ["activity", "start_time"],
+    Spiritual_Logs: ["program_name", "time"],
+    Emotional_Logs: ["activity", "start_time"],
+    Intellectual_Logs: ["activity", "category"],
+    Income: ["category", "description", "amount"],
+    Expenses: ["category", "description", "amount"],
+    Savings: ["category", "description", "amount"],
+    Investments: ["category", "description", "amount"],
+    Financial_Goals: ["goal_name", "target_amount"],
+    Family_Agendas: ["agenda_title", "category"],
+    Quran_Progress: ["surah", "juz", "last_read"],
+    Family_Members: ["member_name", "role"]
+  }[sheet];
+  if (!keys) return null;
+  const currentId = editing?.sheet === sheet ? editing.id : null;
+  const memberId = findMemberId(payload.member_name);
+  const normalize = value => String(value ?? "").trim().toLocaleLowerCase("id-ID");
+  const dateKey = value => String(value ?? "").match(/^\d{4}-\d{2}-\d{2}/)?.[0] || normalize(value);
+  return (state[sheet] || []).find(row => row.id !== currentId && row.status_data !== "deleted" &&
+    normalize(row.member_id) === normalize(memberId) && dateKey(row.date) === dateKey(payload.date) &&
+    keys.every(key => normalize(row[key]) === normalize(payload[key])));
 }
 
 function renderAll() {
@@ -801,6 +952,7 @@ function renderAll() {
   drawCharts();
   const queueCount = document.getElementById("queueCount");
   if (queueCount) queueCount.textContent = `${queue.length} item`;
+  renderSyncConflicts();
 }
 
 function renderMetrics() {
@@ -814,7 +966,7 @@ function renderMetrics() {
     ["Target tercapai", s.goalsReached, `${s.goalsOpen} belum selesai`],
     ["Tilawah", `${s.quranPages} hlm`, `${s.quranMemorized} ayat hafalan`],
     ["Arus kas", rupiah(s.cashflow), `Rasio menabung ${s.savingRatio}%`],
-    ["Pendapatan", rupiah(s.income), "Bulan berjalan/demo"],
+    ["Pendapatan", rupiah(s.income), "Bulan berjalan"],
     ["Pengeluaran", rupiah(s.expenses), "Termasuk zakat dan infak"],
     ["Tabungan", rupiah(s.savings), `${s.emergencyMonths} bulan dana darurat`],
     ["Investasi", rupiah(s.investments), "Aset produktif keluarga"]
@@ -1241,26 +1393,248 @@ function pdfFileName() {
 }
 
 async function enqueueOrSend(item) {
-  if (!config.googleAppsScriptUrl || !navigator.onLine) {
-    queue.push(item);
-    saveQueue();
-    return;
-  }
+  const request = { ...item, requestId: item.requestId || createRequestId(), ownerUser: item.ownerUser || localStorage.getItem(sessionKey), sessionToken: localStorage.getItem(cloudSessionKey) };
+  if (!config.googleAppsScriptUrl || !navigator.onLine) return enqueueLocal(request);
+  if (!request.sessionToken) throw new Error("Sesi server belum aktif. Login ulang dengan internet sebelum menyimpan data.");
   try {
-    await fetch(config.googleAppsScriptUrl, { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(item) });
-  } catch {
-    queue.push(item);
-    saveQueue();
+    const result = await sendCloudRequest(request);
+    if (!result.ok) {
+      const error = new Error(result.error || "Server menolak penyimpanan.");
+      error.serverRejected = true;
+      if (result.conflict) {
+        error.message = "Konflik: data ini sudah diubah dari perangkat lain. Isian masih tersedia; data server sedang dimuat ulang.";
+        error.conflict = true;
+      }
+      throw error;
+    }
+  } catch (error) {
+    if (error.conflict || error.serverRejected) throw error;
+    enqueueLocal(request);
+    throw new Error(`Data tersimpan lokal dan menunggu sinkronisasi: ${error.message}`);
   }
 }
 
 async function syncQueue() {
-  if (!config.googleAppsScriptUrl) return alert("Isi googleAppsScriptUrl di config.js untuk mengaktifkan sinkronisasi Google Workspace.");
-  const copy = [...queue];
-  queue = [];
-  saveQueue();
-  for (const item of copy) await enqueueOrSend(item);
+  if (isSyncing || !config.googleAppsScriptUrl || !navigator.onLine || !localStorage.getItem(cloudSessionKey)) return;
+  isSyncing = true;
+  try {
+    while (queue.length) {
+      const user = localStorage.getItem(sessionKey);
+      const memberId = ACTIVE_ROLE_MEMBER[user];
+      const index = queue.findIndex(entry => {
+        const ownerMatches = entry.ownerUser === user || user === "abi" || (!entry.ownerUser && (user === "ummi" || entry.record?.member_id === memberId));
+        return ownerMatches && isModuleAllowed(user, moduleForLocalSheet(entry.sheet));
+      });
+      if (index < 0) break;
+      const item = queue[index];
+      const result = await sendCloudRequest({ ...item, sessionToken: localStorage.getItem(cloudSessionKey) });
+      if (result.conflict) {
+        queue[index] = { ...item, conflict: true, serverRecord: result.current };
+        saveQueue();
+        const status = document.getElementById("syncStatus");
+        if (status) status.textContent = "Ada perubahan bersamaan. Pilih versi yang dipertahankan di panel Dashboard.";
+        break;
+      }
+      if (!result.ok) throw new Error(result.error || "Sinkronisasi ditolak.");
+      queue.splice(index, 1);
+      saveQueue();
+    }
+  } catch (error) {
+    const status = document.getElementById("syncStatus");
+    if (status) status.textContent = `Antrean belum selesai: ${error.message}`;
+  } finally {
+    isSyncing = false;
+  }
   renderAll();
+}
+
+function enqueueLocal(item) {
+  const key = `${item.action}:${item.sheet}:${item.record?.id || item.requestId}`;
+  const index = queue.findIndex(entry => `${entry.action}:${entry.sheet}:${entry.record?.id || entry.requestId}` === key);
+  if (index >= 0) queue[index] = { ...queue[index], ...item };
+  else if (queue.length < 500) queue.push(item);
+  else throw new Error("Antrean luring mencapai batas 500 item. Sinkronkan dahulu sebelum menambah data.");
+  saveQueue();
+}
+
+async function syncFamilyData() {
+  if (isSyncing || !navigator.onLine || !localStorage.getItem(cloudSessionKey)) return;
+  await syncQueue();
+  isSyncing = true;
+  try {
+    const remote = { ...emptyData() };
+    const syncSheets = SHEETS.filter(sheet => !["Audit_Logs", "App_Settings"].includes(sheet));
+    let nextSheet = 0;
+    const worker = async () => {
+      while (true) {
+        const sheet = syncSheets[nextSheet++];
+        if (!sheet) return;
+        let offset = 0;
+        while (true) {
+          const result = await sendCloudRequest({ action: "syncData", sheet, offset, limit: 25, sessionToken: localStorage.getItem(cloudSessionKey) });
+          if (!result.ok && /tidak memiliki hak membaca/i.test(result.error || "")) break;
+          if (!result.ok) throw new Error(result.error || "Data server tidak dapat dibaca.");
+          remote[sheet].push(...(result.rows || []));
+          if (result.done) break;
+          offset = result.nextOffset;
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, syncSheets.length) }, worker));
+    if (localStorage.getItem(sessionKey) === "abi") {
+      for (const sheet of ["Family_Members", "User_Roles"]) {
+        if (remote[sheet].length || !(state[sheet] || []).length) continue;
+        const initialRows = [...state[sheet]];
+        for (const record of initialRows) {
+          const result = await sendCloudRequest({ action: "upsert", sheet, record, sessionToken: localStorage.getItem(cloudSessionKey) });
+          if (!result.ok) throw new Error(result.error || `Gagal menyiapkan ${sheet}.`);
+        }
+        remote[sheet] = initialRows;
+      }
+    }
+    for (const sheet of SHEETS) {
+        const user = localStorage.getItem(sessionKey);
+        if (!isModuleAllowed(user, moduleForLocalSheet(sheet))) {
+          state[sheet] = [];
+          continue;
+        }
+        state[sheet] = remote[sheet];
+    }
+    const currentUser = localStorage.getItem(sessionKey);
+    queue.forEach(item => {
+      const row = item.record;
+      if (!isModuleAllowed(currentUser, moduleForLocalSheet(item.sheet))) return;
+      if (currentUser !== "abi" && currentUser !== "ummi" && item.ownerUser && item.ownerUser !== currentUser) return;
+      if (currentUser !== "abi" && currentUser !== "ummi" && !item.ownerUser && row?.member_id !== ACTIVE_ROLE_MEMBER[currentUser]) return;
+      if (!row || !state[item.sheet]) return;
+      const index = state[item.sheet].findIndex(existing => existing.id === row.id);
+      if (index >= 0) state[item.sheet][index] = row;
+      else state[item.sheet].push(row);
+    });
+    saveData();
+    const status = document.getElementById("syncStatus");
+    if (status) status.textContent = "Data tersinkron dengan Google Sheets.";
+    renderAll();
+  } catch (error) {
+    const status = document.getElementById("syncStatus");
+    if (status) status.textContent = `Sinkronisasi belum selesai: ${error.message}`;
+  } finally { isSyncing = false; }
+}
+
+function createRequestId() {
+  return crypto.randomUUID?.() || `req-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function renderSyncConflicts() {
+  const panel = document.getElementById("syncConflicts");
+  if (!panel) return;
+  const conflicts = queue.filter(item => item.conflict && item.record && item.serverRecord);
+  panel.hidden = conflicts.length === 0;
+  if (!conflicts.length) { panel.innerHTML = ""; return; }
+  panel.innerHTML = `<h3>Perubahan dari perangkat lain</h3><p>Catatan ini berubah di dua perangkat. Pilih versi yang ingin dipertahankan.</p>${conflicts.map(item => `
+    <div class="conflict-row">
+      <div><strong>${escapeHtml(sheetForms[item.sheet]?.title || item.sheet)}</strong><span>${escapeHtml(item.record.member_name || "")} · ${escapeHtml(item.record.date || "")}</span></div>
+      <div class="form-actions"><button class="btn small" data-conflict="server" data-request-id="${escapeHtml(item.requestId)}">Pakai versi server</button><button class="btn small primary" data-conflict="local" data-request-id="${escapeHtml(item.requestId)}">Pakai versi perangkat ini</button></div>
+    </div>`).join("")}`;
+}
+
+function resolveQueuedConflict(event) {
+  const button = event.target.closest("[data-conflict]");
+  if (!button) return;
+  const index = queue.findIndex(item => item.requestId === button.dataset.requestId && item.conflict);
+  if (index < 0) return;
+  const item = queue[index];
+  if (button.dataset.conflict === "server") {
+    queue.splice(index, 1);
+    const rows = state[item.sheet] || [];
+    state[item.sheet] = [...rows.filter(row => row.id !== item.record.id), item.serverRecord];
+  } else {
+    item.record.base_updated_at = item.serverRecord.updated_at;
+    item.record.updated_at = new Date().toISOString();
+    item.requestId = createRequestId();
+    delete item.conflict;
+    delete item.serverRecord;
+    queue[index] = item;
+    const rows = state[item.sheet] || [];
+    state[item.sheet] = [...rows.filter(row => row.id !== item.record.id), item.record];
+  }
+  saveQueue();
+  saveData();
+  renderAll();
+  syncFamilyData();
+}
+
+function moduleForLocalSheet(sheet) {
+  if (["Family_Members", "User_Roles"].includes(sheet)) return "members";
+  if (/^(Spiritual|Emotional|Intellectual)_/.test(sheet)) return "growth";
+  if (sheet === "Daily_Activities") return "daily";
+  if (["Income", "Expenses", "Savings", "Investments", "Financial_Goals"].includes(sheet)) return "finance";
+  if (sheet === "Family_Agendas") return "agenda";
+  if (sheet === "Quran_Progress") return "quran";
+  if (sheet === "Prayer_Settings") return "prayer";
+  if (sheet === "Notifications") return "notifications";
+  return "reports";
+}
+
+function renderAccessModules() {
+  const user = document.getElementById("accessUser")?.value;
+  const account = familyAccess[user] || {};
+  const enabled = document.querySelector('#accessForm [name="enabled"]');
+  if (enabled) enabled.checked = account.enabled !== false;
+  const available = navItems.filter(([id]) => !["dashboard", "settings", "reports"].includes(id));
+  const container = document.getElementById("accessModules");
+  const defaults = DEFAULT_ACCESS_MODULES[user] || [];
+  if (container) container.innerHTML = available.map(([id, label]) => `<label><input type="checkbox" name="module" value="${id}" ${(account.modules || defaults).includes(id) ? "checked" : ""}> ${label}</label>`).join("");
+}
+
+async function loadAccessSettings() {
+  try {
+    const result = await sendAuthRequest({ action: "accessGet", sessionToken: localStorage.getItem(cloudSessionKey) });
+    if (result.ok) {
+      familyAccess = { ...familyAccess, ...(result.access || {}) };
+      localStorage.setItem(accessKey, JSON.stringify(familyAccess));
+      restrictStateForUser(localStorage.getItem(sessionKey));
+      renderNav(localStorage.getItem(sessionKey));
+      renderAll();
+      renderAccessModules();
+    }
+  } catch {}
+}
+
+async function handleAccessSave(event) {
+  event.preventDefault();
+  if (localStorage.getItem(sessionKey) !== "abi") return;
+  const form = event.currentTarget;
+  if (form.dataset.submitting === "true") return;
+  form.dataset.submitting = "true";
+  const button = form.querySelector('[type="submit"]');
+  if (button) button.disabled = true;
+  const user = form.elements.account.value;
+  const account = { enabled: form.elements.enabled.checked, modules: [...form.querySelectorAll('[name="module"]:checked')].map(input => input.value) };
+  try {
+    const result = await sendAuthRequest({ action: "accessSet", user, account, sessionToken: localStorage.getItem(cloudSessionKey) });
+    if (!result.ok) throw new Error(result.error || "Hak akses gagal disimpan.");
+    familyAccess[user] = account;
+    localStorage.setItem(accessKey, JSON.stringify(familyAccess));
+    form.querySelector(".status-line").textContent = "Hak akses tersimpan.";
+  } catch (error) { form.querySelector(".status-line").textContent = error.message; }
+  finally { form.dataset.submitting = "false"; if (button) button.disabled = false; }
+}
+
+async function cleanDemoData(automatic = false) {
+  const cleanupKey = `${config.familyId}:demo-cleanup:v1`;
+  if (localStorage.getItem(sessionKey) !== "abi" || (!automatic && !confirm("Hapus hanya baris yang jelas ditandai sebagai data demo dari Google Sheets? Profil keluarga dan data lainnya tidak dihapus."))) return;
+  if (automatic && localStorage.getItem(cleanupKey)) return;
+  const status = document.querySelector("#settings .status-line");
+  try {
+    const result = await sendAuthRequest({ action: "cleanDemo", sessionToken: localStorage.getItem(cloudSessionKey) });
+    if (!result.ok) throw new Error(result.error || "Pembersihan data demo gagal.");
+    localStorage.setItem(cleanupKey, "1");
+    status.textContent = `${result.deleted} baris demo dihapus. Data keluarga lainnya tetap utuh.`;
+    for (const sheet of SHEETS) state[sheet] = (state[sheet] || []).filter(row => row.created_by !== "demo" && row.updated_by !== "demo");
+    saveData();
+    renderAll();
+  } catch (error) { status.textContent = error.message; }
 }
 
 function visibleRows(sheet) {
@@ -1420,7 +1794,17 @@ function escapeHtml(value = "") {
 function loadData() {
   try {
     const saved = localStorage.getItem(storageKey);
-    if (saved) return { ...emptyData(), ...JSON.parse(saved) };
+    if (saved) {
+      const data = { ...emptyData(), ...JSON.parse(saved) };
+      let changed = false;
+      for (const sheet of SHEETS.filter(name => !["Family_Members", "User_Roles"].includes(name))) {
+        const cleanRows = (data[sheet] || []).filter(row => row.created_by !== "demo" && row.updated_by !== "demo");
+        if (cleanRows.length !== (data[sheet] || []).length) changed = true;
+        data[sheet] = cleanRows;
+      }
+      if (changed) localStorage.setItem(storageKey, JSON.stringify(data));
+      return data;
+    }
   } catch {}
   return { ...emptyData(), ...seedData(new Date()) };
 }
@@ -1434,21 +1818,17 @@ function saveData() {
 }
 
 function loadQueue() {
-  try { return JSON.parse(localStorage.getItem(queueKey) || "[]"); }
+  try {
+    const items = JSON.parse(localStorage.getItem(queueKey) || "[]");
+    const clean = items.filter(item => item.record?.created_by !== "demo" && item.record?.updated_by !== "demo");
+    if (clean.length !== items.length) localStorage.setItem(queueKey, JSON.stringify(clean));
+    return clean;
+  }
   catch { return []; }
 }
 
 function saveQueue() {
   localStorage.setItem(queueKey, JSON.stringify(queue));
-}
-
-function resetDemo() {
-  if (!confirm("Reset data demo lokal?")) return;
-  state = { ...emptyData(), ...seedData(new Date()) };
-  queue = [];
-  saveData();
-  saveQueue();
-  renderAll();
 }
 
 function exportJson() {
