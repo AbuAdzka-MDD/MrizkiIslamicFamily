@@ -1,4 +1,4 @@
-const CACHE_NAME = "family-rizki-pwa-v18-login-checkbox";
+const CACHE_NAME = "family-rizki-pwa-v19-login-refresh";
 const ASSETS = [
   "./",
   "./index.html",
