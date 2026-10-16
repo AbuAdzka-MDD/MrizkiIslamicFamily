@@ -68,7 +68,7 @@ function authProvision_(body) {
   try {
     const props = PropertiesService.getScriptProperties();
     if (props.getProperty('FAMILY_AUTH')) return { ok: true, exists: true };
-    if (!validAuthRecords_(body.users) || !body.users.abi) return { ok: false, error: 'Invalid password records' };
+    if (!validAuthRecords_(body.users, true) || !body.users.abi) return { ok: false, error: 'Invalid password records' };
     props.setProperty('FAMILY_AUTH', JSON.stringify(body.users));
     return { ok: true, created: true };
   } finally {
@@ -93,9 +93,11 @@ function authLogin_(body) {
   return { ok: Boolean(record && verifyPassword_(record, body.password)), error: record ? 'Password belum sesuai.' : 'Akun belum disiapkan oleh Abi.' };
 }
 
-function validAuthRecords_(users) {
+function validAuthRecords_(users, allowAbiBootstrap) {
   const allowed = ['abi', 'ummi', 'alif_aslam', 'muslim_ihsan', 'm_bilal_albana', 'fajri_rahman', 'adzkadina_salsabila'];
-  return users && allowed.every(user => users[user] && /^[a-f0-9]{64}$/i.test(users[user].hash) && typeof users[user].salt === 'string');
+  if (!users || Object.keys(users).some(user => !allowed.includes(user))) return false;
+  const required = allowAbiBootstrap && Object.keys(users).length === 1 && users.abi ? ['abi'] : allowed;
+  return required.every(user => users[user] && /^[a-f0-9]{64}$/i.test(users[user].hash) && typeof users[user].salt === 'string');
 }
 
 function verifyPassword_(record, password) {

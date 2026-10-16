@@ -319,22 +319,33 @@ async function handleLogin(event) {
       status.textContent = cloud.error;
       return;
     }
-    if (user === "abi" && auth.abi) {
-      const hash = await hashPassword(auth.abi.salt, password);
-      if (hash === auth.abi.hash && LOGIN_USERS.every(([member]) => auth[member])) {
-        const provision = await sendAuthRequest({ action: "authProvision", users: auth });
-        if (provision.exists) {
-          const retry = await sendAuthRequest({ action: "authLogin", user, password });
-          if (retry.ok) {
-            localStorage.setItem(sessionKey, user);
-            unlockApp(user);
-            return;
-          }
-        } else if (provision.created) {
+    if (user === "abi") {
+      let recordsToProvision;
+      if (auth.abi) {
+        const hash = await hashPassword(auth.abi.salt, password);
+        if (hash !== auth.abi.hash) {
+          status.textContent = "Password belum sesuai.";
+          return;
+        }
+        recordsToProvision = LOGIN_USERS.every(([member]) => auth[member]) ? auth : { abi: auth.abi };
+      } else {
+        recordsToProvision = { abi: await createPasswordRecord(password) };
+      }
+      const provision = await sendAuthRequest({ action: "authProvision", users: recordsToProvision });
+      if (provision.created) {
+        localStorage.setItem(sessionKey, user);
+        unlockApp(user);
+        return;
+      }
+      if (provision.exists) {
+        const retry = await sendAuthRequest({ action: "authLogin", user, password });
+        if (retry.ok) {
           localStorage.setItem(sessionKey, user);
           unlockApp(user);
           return;
         }
+        status.textContent = retry.error || "Password belum sesuai.";
+        return;
       }
     }
     status.textContent = cloud.error || "Password keluarga belum tersedia di server.";
