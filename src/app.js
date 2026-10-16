@@ -365,7 +365,7 @@ async function handleLogin(event) {
     }
     status.textContent = cloud.error || "Password keluarga belum tersedia di server.";
   } catch (error) {
-    status.textContent = "Tidak dapat terhubung ke server login. Periksa koneksi internet lalu coba lagi.";
+    status.textContent = error?.message || "Server login tidak merespons. Coba lagi sebentar.";
   }
 }
 
@@ -374,7 +374,8 @@ async function sendAuthRequest(payload) {
 }
 
 async function sendCloudRequest(payload) {
-  if (!config.googleAppsScriptUrl || !navigator.onLine) throw new Error("Koneksi ke server login tidak tersedia.");
+  // navigator.onLine is unreliable in installed desktop browsers; let the request determine connectivity.
+  if (!config.googleAppsScriptUrl) throw new Error("Alamat server login belum diatur.");
   const requestId = createRequestId();
   await fetch(config.googleAppsScriptUrl, {
     method: "POST",
@@ -825,7 +826,7 @@ function settingsTemplate() {
       <form class="panel" id="accessForm">
         <h3>Hak Akses Pengguna</h3>
         <label>Pengguna<select id="accessUser" name="account">${LOGIN_USERS.filter(([id]) => id !== "abi").map(([id, name]) => `<option value="${id}">${escapeHtml(name)}</option>`).join("")}</select></label>
-        <label><input type="checkbox" name="enabled" checked> Akun aktif</label>
+        <label class="inline-checkbox"><input type="checkbox" name="enabled" checked><span>Akun aktif</span></label>
         <div id="accessModules" class="form-grid"></div>
         <button class="btn primary" type="submit">Simpan Hak Akses</button>
         <p class="status-line">Hak akses disimpan untuk akun terpilih.</p>
@@ -1584,7 +1585,7 @@ function renderAccessModules() {
   const available = navItems.filter(([id]) => !["dashboard", "settings", "reports"].includes(id));
   const container = document.getElementById("accessModules");
   const defaults = DEFAULT_ACCESS_MODULES[user] || [];
-  if (container) container.innerHTML = available.map(([id, label]) => `<label><input type="checkbox" name="module" value="${id}" ${(account.modules || defaults).includes(id) ? "checked" : ""}> ${label}</label>`).join("");
+  if (container) container.innerHTML = available.map(([id, label]) => `<label class="access-module-option"><input type="checkbox" name="module" value="${id}" ${(account.modules || defaults).includes(id) ? "checked" : ""}><span>${label}</span></label>`).join("");
 }
 
 async function loadAccessSettings() {
