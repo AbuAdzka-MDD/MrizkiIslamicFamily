@@ -43,10 +43,10 @@ function doGet(e) {
 }
 
 function doPost(e) {
-  let requestId = '';
+  let requestId = String(e && e.parameter && e.parameter.requestId || '');
   try {
     const body = JSON.parse(e.postData.contents || '{}');
-    requestId = String(body.requestId || '');
+    requestId = String(body.requestId || requestId);
     if (['authLogin', 'authProvision', 'authSetPassword', 'accessGet', 'accessSet', 'cleanDemo', 'profilePhotoGet', 'profilePhotoSet'].includes(body.action)) {
       const handlers = {
         authLogin: authLogin_, authProvision: authProvision_,
@@ -54,7 +54,7 @@ function doPost(e) {
         profilePhotoGet: profilePhotoGet_, profilePhotoSet: profilePhotoSet_
       };
       const result = handlers[body.action](body);
-      if (body.requestId) CacheService.getScriptCache().put('auth:' + body.requestId, JSON.stringify(result), 45);
+      if (body.requestId) storeAuthResult_(body.requestId, result);
       return json_(result);
     }
     const user = verifySessionToken_(body.sessionToken);
@@ -334,7 +334,20 @@ function authResult_(params) {
   const callback = String(params.callback || '').replace(/[^\w$.]/g, '');
   const requestId = String(params.requestId || '').replace(/[^\w-]/g, '');
   const cache = CacheService.getScriptCache();
-  const result = cache.get('auth:' + requestId) || cache.get('write:' + requestId);
+  const cached = cache.get('auth:' + requestId) || cache.get('write:' + requestId);
+  const props = PropertiesService.getScriptProperties();
+  const key = 'AUTH_RESULT_' + requestId;
+  const backup = props.getProperty(key);
+  if (backup) props.deleteProperty(key);
+  let result = cached;
+  if (!result && backup) {
+    try {
+      const saved = JSON.parse(backup);
+      if (saved.expiresAt > Date.now()) result = JSON.stringify(saved.result);
+    } catch (error) {
+      result = null;
+    }
+  }
   const payload = result ? JSON.parse(result) : { pending: true };
   return ContentService.createTextOutput(callback + '(' + JSON.stringify(payload) + ');').setMimeType(ContentService.MimeType.JAVASCRIPT);
 }
@@ -487,4 +500,16 @@ function sanitize_(value) {
 
 function json_(payload) {
   return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function storeAuthResult_(requestId, result) {
+  const id = String(requestId || '').replace(/[^\\w-]/g, '');
+  if (!id) return;
+  const serialized = JSON.stringify(result);
+  CacheService.getScriptCache().put('auth:' + id, serialized, 45);
+  try {
+    PropertiesService.getScriptProperties().setProperty('AUTH_RESULT_' + id, JSON.stringify({ expiresAt: Date.now() + 120000, result: result }));
+  } catch (error) {
+    // Script cache remains the primary result store.
+  }
 }
