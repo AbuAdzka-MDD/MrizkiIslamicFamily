@@ -277,15 +277,24 @@ function renderPasswordSetupFields() {
 async function handlePasswordSetup(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  const status = form.querySelector(".status-line");
   const auth = {};
   for (const [user] of LOGIN_USERS) {
     const password = form.elements[user].value;
     if (password.length < 4) return;
     auth[user] = await createPasswordRecord(password);
   }
+  const abiPassword = prompt("Masukkan password Abi yang sedang digunakan untuk mengonfirmasi perubahan:");
+  if (!abiPassword) return;
+  try {
+    const result = await sendAuthRequest({ action: "authSetup", users: auth, abiPassword });
+    if (!result.ok) throw new Error(result.error || "Pengaturan password gagal.");
+  } catch (error) {
+    if (status) status.textContent = `${error.message} Password belum diubah.`;
+    return;
+  }
   localStorage.setItem(authKey, JSON.stringify(auth));
   localStorage.setItem(sessionKey, "abi");
-  const status = form.querySelector(".status-line");
   if (status) status.textContent = "Password keluarga berhasil disimpan. Gunakan password baru saat login berikutnya.";
   form.reset();
   unlockApp("abi");
@@ -297,25 +306,79 @@ async function handleLogin(event) {
   const password = document.getElementById("loginPassword").value;
   const status = document.getElementById("loginStatus");
   const auth = loadAuth() || {};
-  if (!auth || !auth[user]) {
-    if (password.length < 4) {
-      status.textContent = "Password minimal 4 karakter.";
+  status.textContent = "Memeriksa password keluarga...";
+  try {
+    const cloud = await sendAuthRequest({ action: "authLogin", user, password });
+    if (cloud.ok) {
+      localStorage.setItem(sessionKey, user);
+      status.textContent = "";
+      unlockApp(user);
       return;
     }
-    auth[user] = await createPasswordRecord(password);
-    localStorage.setItem(authKey, JSON.stringify(auth));
-    localStorage.setItem(sessionKey, user);
-    status.textContent = "Password user ini disimpan di perangkat ini. Membuka dashboard...";
-    unlockApp(user);
-    return;
+    if (cloud.error === "Password belum sesuai.") {
+      status.textContent = cloud.error;
+      return;
+    }
+    if (user === "abi" && auth.abi) {
+      const hash = await hashPassword(auth.abi.salt, password);
+      if (hash === auth.abi.hash && LOGIN_USERS.every(([member]) => auth[member])) {
+        const provision = await sendAuthRequest({ action: "authProvision", users: auth });
+        if (provision.exists) {
+          const retry = await sendAuthRequest({ action: "authLogin", user, password });
+          if (retry.ok) {
+            localStorage.setItem(sessionKey, user);
+            unlockApp(user);
+            return;
+          }
+        } else if (provision.created) {
+          localStorage.setItem(sessionKey, user);
+          unlockApp(user);
+          return;
+        }
+      }
+    }
+    status.textContent = cloud.error || "Password keluarga belum tersedia di server.";
+  } catch (error) {
+    status.textContent = "Tidak dapat terhubung ke server login. Periksa koneksi internet lalu coba lagi.";
   }
-  const hash = await hashPassword(auth[user].salt, password);
-  if (hash !== auth[user].hash) {
-    status.textContent = "Password belum sesuai.";
-    return;
-  }
-  localStorage.setItem(sessionKey, user);
-  unlockApp(user);
+}
+
+async function sendAuthRequest(payload) {
+  if (!config.googleAppsScriptUrl || !navigator.onLine) throw new Error("Koneksi ke server login tidak tersedia.");
+  const requestId = crypto.randomUUID();
+  await fetch(config.googleAppsScriptUrl, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ ...payload, requestId })
+  });
+  return pollAuthResult(requestId);
+}
+
+function pollAuthResult(requestId) {
+  return new Promise((resolve, reject) => {
+    const callback = `authCallback_${requestId.replace(/-/g, "")}`;
+    let attempts = 0;
+    const check = () => {
+      if (attempts++ >= 20) {
+        delete window[callback];
+        reject(new Error("Server login tidak merespons. Coba lagi sebentar."));
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = `${config.googleAppsScriptUrl}?action=authResult&requestId=${encodeURIComponent(requestId)}&callback=${callback}&t=${Date.now()}`;
+      script.onerror = () => { script.remove(); setTimeout(check, 500); };
+      script.onload = () => {
+        script.remove();
+        const result = window[callback]?.result;
+        if (result && !result.pending) { delete window[callback]; resolve(result); }
+        else setTimeout(check, 500);
+      };
+      document.head.append(script);
+    };
+    window[callback] = result => { window[callback].result = result; window[callback].pending = Boolean(result.pending); };
+    check();
+  });
 }
 
 function togglePasswordVisibility() {

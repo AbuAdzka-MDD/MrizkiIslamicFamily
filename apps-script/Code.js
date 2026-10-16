@@ -31,6 +31,8 @@ const SCHEMA = {
 };
 
 function doGet(e) {
+  const action = e && e.parameter && e.parameter.action;
+  if (action === 'authResult') return authResult_(e.parameter);
   const ss = getSpreadsheet_();
   const payload = { ok: true, appName: APP_NAME, spreadsheetId: ss.getId(), summary: buildSummary_(ss) };
   const callback = e && e.parameter && e.parameter.callback;
@@ -43,6 +45,12 @@ function doGet(e) {
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents || '{}');
+    if (['authLogin', 'authProvision', 'authSetup'].includes(body.action)) {
+      const result = body.action === 'authLogin' ? authLogin_(body)
+        : body.action === 'authProvision' ? authProvision_(body) : authSetup_(body);
+      if (body.requestId) CacheService.getScriptCache().put('auth:' + body.requestId, JSON.stringify(result), 45);
+      return json_(result);
+    }
     const ss = getSpreadsheet_();
     if (body.action === 'upsert') return json_(upsert_(ss, body.sheet, body.record));
     if (body.action === 'delete') return json_(softDelete_(ss, body.sheet, body.record));
@@ -52,6 +60,56 @@ function doPost(e) {
   } catch (error) {
     return json_({ ok: false, error: String(error) });
   }
+}
+
+function authProvision_(body) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const props = PropertiesService.getScriptProperties();
+    if (props.getProperty('FAMILY_AUTH')) return { ok: true, exists: true };
+    if (!validAuthRecords_(body.users) || !body.users.abi) return { ok: false, error: 'Invalid password records' };
+    props.setProperty('FAMILY_AUTH', JSON.stringify(body.users));
+    return { ok: true, created: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function authSetup_(body) {
+  const props = PropertiesService.getScriptProperties();
+  const users = body.users;
+  if (!validAuthRecords_(users)) return { ok: false, error: 'Invalid password records' };
+  const current = JSON.parse(props.getProperty('FAMILY_AUTH') || '{}');
+  if (!current.abi || !verifyPassword_(current.abi, body.abiPassword)) return { ok: false, error: 'Abi password is not verified' };
+  props.setProperty('FAMILY_AUTH', JSON.stringify(users));
+  return { ok: true };
+}
+
+function authLogin_(body) {
+  const records = JSON.parse(PropertiesService.getScriptProperties().getProperty('FAMILY_AUTH') || '{}');
+  const record = records[body.user];
+  return { ok: Boolean(record && verifyPassword_(record, body.password)), error: record ? 'Password belum sesuai.' : 'Akun belum disiapkan oleh Abi.' };
+}
+
+function validAuthRecords_(users) {
+  const allowed = ['abi', 'ummi', 'alif_aslam', 'muslim_ihsan', 'm_bilal_albana', 'fajri_rahman', 'adzkadina_salsabila'];
+  return users && allowed.every(user => users[user] && /^[a-f0-9]{64}$/i.test(users[user].hash) && typeof users[user].salt === 'string');
+}
+
+function verifyPassword_(record, password) {
+  if (!record || typeof password !== 'string') return false;
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, record.salt + ':' + password, Utilities.Charset.UTF_8);
+  const hash = digest.map(byte => ('0' + ((byte + 256) % 256).toString(16)).slice(-2)).join('');
+  return hash === record.hash;
+}
+
+function authResult_(params) {
+  const callback = String(params.callback || '').replace(/[^\w$.]/g, '');
+  const requestId = String(params.requestId || '').replace(/[^\w-]/g, '');
+  const result = CacheService.getScriptCache().get('auth:' + requestId);
+  const payload = result ? JSON.parse(result) : { pending: true };
+  return ContentService.createTextOutput(callback + '(' + JSON.stringify(payload) + ');').setMimeType(ContentService.MimeType.JAVASCRIPT);
 }
 
 function getSpreadsheet_() {
