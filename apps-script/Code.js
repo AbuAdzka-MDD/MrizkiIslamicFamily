@@ -301,8 +301,7 @@ function profilePhotoGet_(body) {
     const blob = DriveApp.getFileById(fileId).getBlob();
     return { ok: true, photoData: 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes()), sessionToken: issueSessionToken_(user, JSON.parse(props.getProperty('FAMILY_AUTH'))[user]) };
   } catch (error) {
-    props.deleteProperty(key);
-    return { ok: true, photoData: '', sessionToken: issueSessionToken_(user, JSON.parse(props.getProperty('FAMILY_AUTH'))[user]) };
+    return { ok: false, error: 'Foto profil belum dapat dibaca dari Google Drive. Silakan coba lagi.' };
   }
 }
 
@@ -544,7 +543,7 @@ function json_(payload) {
 }
 
 function storeAuthResult_(requestId, result) {
-  const id = String(requestId || '').replace(/[^\\w-]/g, '');
+  const id = String(requestId || '').replace(/[^\w-]/g, '');
   if (!id) return;
   const serialized = JSON.stringify(result);
   CacheService.getScriptCache().put('auth:' + id, serialized, 45);
