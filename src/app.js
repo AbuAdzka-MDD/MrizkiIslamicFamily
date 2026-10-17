@@ -374,7 +374,44 @@ async function handleLogin(event) {
 }
 
 async function sendAuthRequest(payload) {
+  if (payload.action === "authLogin") return sendLoginBridge(payload);
   return sendCloudRequest(payload);
+}
+
+function sendLoginBridge(payload) {
+  if (!config.googleAppsScriptUrl) return Promise.reject(new Error("Alamat server login belum diatur."));
+  return new Promise((resolve, reject) => {
+    const requestId = createRequestId();
+    const frame = document.createElement("iframe");
+    frame.title = "Secure family login";
+    frame.hidden = true;
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      window.removeEventListener("message", onMessage);
+      frame.remove();
+    };
+    const finish = (error, result) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve(result);
+    };
+    const onMessage = event => {
+      if (event.source !== frame.contentWindow || !/^(https:\/\/script\.google\.com|https:\/\/[^/]+\.googleusercontent\.com)$/.test(event.origin)) return;
+      const message = event.data;
+      if (message?.type !== "family-auth-response" || message.requestId !== requestId) return;
+      if (message.error) finish(new Error(message.error));
+      else finish(null, message.result);
+    };
+    const timer = setTimeout(() => finish(new Error("Server login tidak merespons. Periksa koneksi lalu coba lagi.")), 20000);
+    window.addEventListener("message", onMessage);
+    frame.onload = () => frame.contentWindow.postMessage({ type: "family-auth-request", requestId, payload }, "*");
+    frame.onerror = () => finish(new Error("Halaman autentikasi Google tidak dapat dibuka."));
+    frame.src = `${config.googleAppsScriptUrl}?action=authFrame&v=1`;
+    document.body.append(frame);
+  });
 }
 
 async function sendCloudRequest(payload) {
