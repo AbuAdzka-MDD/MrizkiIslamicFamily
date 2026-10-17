@@ -8,6 +8,7 @@ import {
   sanitizeText,
   seedData
 } from "./logic.mjs";
+import { requestAppsScript } from "./cloud-client.mjs";
 
 const config = window.APP_CONFIG || {};
 const storageKey = `${config.familyId}:data:v3`;
@@ -321,26 +322,33 @@ async function handlePasswordSetup(event) {
   }
 }
 
-function handleLogin(event) {
+async function handleLogin(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const password = document.getElementById("loginPassword");
+  const user = document.getElementById("loginUser").value;
   const status = document.getElementById("loginStatus");
+  const button = form.querySelector('[type="submit"]');
   if (form.dataset.submitting === "true" || !password.value) return;
   form.dataset.submitting = "true";
-  status.textContent = "Menghubungkan dengan aman ke server keluarga...";
-  const setHidden = (name, value) => {
-    let field = form.querySelector(`input[name="${name}"]`);
-    if (!field) { field = document.createElement("input"); field.type = "hidden"; field.name = name; form.append(field); }
-    field.value = value;
-  };
-  setHidden("action", "authLoginForm");
-  document.getElementById("loginUser").name = "user";
-  password.name = "password";
-  form.method = "post";
-  form.action = config.googleAppsScriptUrl;
-  form.target = "_top";
-  form.submit();
+  form.setAttribute("aria-busy", "true");
+  if (button) button.disabled = true;
+  status.textContent = "Memeriksa akun...";
+  try {
+    const result = await sendAuthRequest({ action: "authLogin", user, password: password.value });
+    if (!result.ok || !result.sessionToken) throw new Error(result.error || "Akun belum dapat diverifikasi.");
+    localStorage.setItem(cloudSessionKey, result.sessionToken);
+    localStorage.setItem(sessionKey, user);
+    password.value = "";
+    status.textContent = "";
+    unlockApp(user);
+  } catch (error) {
+    status.textContent = error.message || "Login belum berhasil. Silakan coba lagi.";
+  } finally {
+    form.dataset.submitting = "false";
+    form.removeAttribute("aria-busy");
+    if (button) button.disabled = false;
+  }
 }
 
 function consumeLoginRedirect() {
@@ -375,102 +383,11 @@ function sendAuthRequest(payload) {
   return sendCloudRequest(payload);
 }
 
-function sendLoginBridge(payload) {
-  if (!config.googleAppsScriptUrl) return Promise.reject(new Error("Alamat server login belum diatur."));
-  return new Promise((resolve, reject) => {
-    const requestId = createRequestId();
-    const frame = document.createElement("iframe");
-    frame.title = "Secure family login";
-    frame.hidden = true;
-    let settled = false;
-    const cleanup = () => {
-      clearTimeout(timer);
-      window.removeEventListener("message", onMessage);
-      frame.remove();
-    };
-    const finish = (error, result) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      if (error) reject(error);
-      else resolve(result);
-    };
-    const onMessage = event => {
-      if (event.source !== frame.contentWindow || !/^(https:\/\/script\.google\.com|https:\/\/[^/]+\.googleusercontent\.com)$/.test(event.origin)) return;
-      const message = event.data;
-      if (message?.type !== "family-auth-response" || message.requestId !== requestId) return;
-      if (message.error) finish(new Error(message.error));
-      else finish(null, message.result);
-    };
-    const timer = setTimeout(() => finish(new Error("Server login tidak merespons. Periksa koneksi lalu coba lagi.")), 20000);
-    window.addEventListener("message", onMessage);
-    frame.onload = () => frame.contentWindow.postMessage({ type: "family-auth-request", requestId, payload }, "*");
-    frame.onerror = () => finish(new Error("Halaman autentikasi Google tidak dapat dibuka."));
-    frame.src = `${config.googleAppsScriptUrl}?action=authFrame&v=1`;
-    document.body.append(frame);
-  });
-}
-
 async function sendCloudRequest(payload) {
-  // navigator.onLine is unreliable in installed desktop browsers; let the request determine connectivity.
-  if (!config.googleAppsScriptUrl) throw new Error("Alamat server login belum diatur.");
-  const requestId = createRequestId();
-  await fetch(config.googleAppsScriptUrl, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ ...payload, requestId })
-  });
-  const result = await pollAuthResult(requestId);
+  const requestId = payload.requestId || createRequestId();
+  const result = await requestAppsScript(config.googleAppsScriptUrl, { ...payload, requestId });
   saveCloudSession(result);
   return result;
-}
-
-function pollAuthResult(requestId) {
-  return new Promise((resolve, reject) => {
-    const callback = `authCallback_${requestId.replace(/-/g, "")}`;
-    const deadline = Date.now() + 30000;
-    let activeScript;
-    let attemptTimer;
-    const finish = (error, result) => {
-      clearTimeout(attemptTimer);
-      activeScript?.remove();
-      delete window[callback];
-      if (error) reject(error);
-      else resolve(result);
-    };
-    const check = () => {
-      if (Date.now() >= deadline) {
-        finish(new Error("Server login terlalu lama merespons. Muat ulang halaman dan coba lagi."));
-        return;
-      }
-      const script = document.createElement("script");
-      activeScript = script;
-      let settled = false;
-      const retry = () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(attemptTimer);
-        script.remove();
-        attemptTimer = setTimeout(check, 700);
-      };
-      script.src = `${config.googleAppsScriptUrl}?action=authResult&requestId=${encodeURIComponent(requestId)}&callback=${callback}&t=${Date.now()}`;
-      script.onerror = retry;
-      script.onload = () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(attemptTimer);
-        script.remove();
-        const result = window[callback]?.result;
-        if (result && !result.pending) finish(null, result);
-        else attemptTimer = setTimeout(check, 700);
-      };
-      attemptTimer = setTimeout(retry, 5000);
-      document.head.append(script);
-    };
-    window[callback] = result => { window[callback].result = result; window[callback].pending = Boolean(result.pending); };
-    check();
-  });
 }
 
 function togglePasswordVisibility() {
@@ -492,8 +409,7 @@ function unlockApp(user) {
   roleSelect.disabled = true;
   restrictStateForUser(user);
   updateDashboardProfile(user);
-  const photoStatus = document.getElementById("profilePhotoStatus");
-  if (photoStatus) photoStatus.textContent = loadProfilePhotoPending()[user] ? "Foto tersimpan di perangkat; pilih kembali untuk mengirim." : "Ubah foto";
+  loadCloudProfilePhoto(user);
   renderNav(user);
   if (!canAccess(user, "all") && ["reports", "settings"].some(id => document.getElementById(id).classList.contains("active"))) {
     showView("dashboard");
@@ -522,35 +438,57 @@ function setProfilePhotoPending(user, pending) {
   localStorage.setItem(profilePhotoPendingKey, JSON.stringify(users));
 }
 
-function submitProfilePhotoForm(action, user, photoData = "") {
+async function uploadProfilePhoto(user, photoData) {
   const token = localStorage.getItem(cloudSessionKey);
-  if (!token || !config.googleAppsScriptUrl) throw new Error("Login kembali untuk menyinkronkan foto.");
-  const form = document.createElement("form");
-  form.method = "post";
-  form.action = config.googleAppsScriptUrl;
-  form.target = "_top";
-  form.hidden = true;
-  for (const [name, value] of Object.entries({ action, user, sessionToken: token, photoData })) {
-    const field = document.createElement("input");
-    field.type = "hidden";
-    field.name = name;
-    field.value = value;
-    form.append(field);
+  if (!token) throw new Error("Login kembali untuk menyinkronkan foto.");
+  const result = await sendAuthRequest({ action: "profilePhotoSet", user, sessionToken: token, photoData });
+  if (!result.ok) throw new Error(result.error || "Foto belum dapat disimpan.");
+  if (loadProfilePhotos()[user] === photoData) setProfilePhotoPending(user, false);
+  if (localStorage.getItem(sessionKey) === user) {
+    updateDashboardProfile(user);
+    const status = document.getElementById("profilePhotoStatus");
+    if (status) status.textContent = "Foto tersimpan dan tersinkron";
   }
-  document.body.append(form);
-  form.submit();
+}
+
+async function loadCloudProfilePhoto(user) {
+  const token = localStorage.getItem(cloudSessionKey);
+  if (!token) return;
+  const localPhoto = loadProfilePhotos()[user];
+  const status = document.getElementById("profilePhotoStatus");
+  try {
+    if (loadProfilePhotoPending()[user] && localPhoto) {
+      await uploadProfilePhoto(user, localPhoto);
+      return;
+    }
+    const result = await sendAuthRequest({ action: "profilePhotoGet", user, sessionToken: token });
+    if (!result.ok) throw new Error(result.error || "Foto belum dapat dimuat.");
+    if (loadProfilePhotos()[user] !== localPhoto || loadProfilePhotoPending()[user]) return;
+    if (result.photoData) {
+      const photos = loadProfilePhotos();
+      photos[user] = result.photoData;
+      localStorage.setItem(profilePhotoKey, JSON.stringify(photos));
+      if (localStorage.getItem(sessionKey) === user) {
+        updateDashboardProfile(user);
+        if (status) status.textContent = "Foto tersinkron";
+      }
+    } else if (localPhoto) {
+      const photoData = await encodeProfilePhoto(localPhoto);
+      if (loadProfilePhotos()[user] !== localPhoto || loadProfilePhotoPending()[user]) return;
+      const photos = loadProfilePhotos();
+      photos[user] = photoData;
+      localStorage.setItem(profilePhotoKey, JSON.stringify(photos));
+      setProfilePhotoPending(user, true);
+      await uploadProfilePhoto(user, photoData);
+    }
+  } catch (error) {
+    if (status && localStorage.getItem(sessionKey) === user) status.textContent = `Foto belum tersinkron: ${error.message}`;
+  }
 }
 
 function refreshProfilePhoto() {
   const user = localStorage.getItem(sessionKey);
-  if (!user) return;
-  const status = document.getElementById("profilePhotoStatus");
-  try {
-    if (status) status.textContent = "Mengambil foto dari server...";
-    submitProfilePhotoForm("profilePhotoLoadForm", user);
-  } catch (error) {
-    if (status) status.textContent = error.message;
-  }
+  if (user) loadCloudProfilePhoto(user);
 }
 
 function updateDashboardProfile(user) {
@@ -596,7 +534,7 @@ async function handleProfilePhoto(event) {
     savedOnDevice = true;
     if (localStorage.getItem(sessionKey) === user) updateDashboardProfile(user);
     if (status) status.textContent = "Mengirim foto ke server...";
-    submitProfilePhotoForm("profilePhotoSaveForm", user, photoData);
+    await uploadProfilePhoto(user, photoData);
   } catch (error) {
     if (status) status.textContent = savedOnDevice
       ? `Foto tersimpan di perangkat; sinkronisasi belum selesai: ${error.message}`
