@@ -270,7 +270,10 @@ function initAuth() {
   const loginUser = document.getElementById("loginUser");
   loginUser.innerHTML = LOGIN_USERS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
 
+  const loginRedirect = consumeLoginRedirect();
+  if (loginRedirect.user && LOGIN_USERS.some(([user]) => user === loginRedirect.user)) loginUser.value = loginRedirect.user;
   document.getElementById("loginForm").addEventListener("submit", handleLogin);
+  if (loginRedirect.error) document.getElementById("loginStatus").textContent = loginRedirect.error;
   document.getElementById("togglePasswordBtn")?.addEventListener("click", togglePasswordVisibility);
   document.getElementById("logoutBtn").addEventListener("click", logout);
   document.getElementById("profilePhotoInput")?.addEventListener("change", handleProfilePhoto);
@@ -311,69 +314,45 @@ async function handlePasswordSetup(event) {
   }
 }
 
-async function handleLogin(event) {
+function handleLogin(event) {
   event.preventDefault();
-  const user = document.getElementById("loginUser").value;
-  const password = document.getElementById("loginPassword").value;
+  const form = event.currentTarget;
+  const password = document.getElementById("loginPassword");
   const status = document.getElementById("loginStatus");
-  const auth = loadAuth() || {};
-  status.textContent = "Memeriksa password keluarga...";
-  try {
-    const cloud = await sendAuthRequest({ action: "authLogin", user, password });
-    if (cloud.ok) {
-      saveCloudSession(cloud);
-      localStorage.setItem(sessionKey, user);
-      status.textContent = "";
-      unlockApp(user);
-      return;
-    }
-    if (cloud.error === "Password belum sesuai.") {
-      status.textContent = cloud.error;
-      return;
-    }
-    if (user === "abi") {
-      let recordsToProvision;
-      if (auth.abi) {
-        const hash = await hashPassword(auth.abi.salt, password);
-        if (hash !== auth.abi.hash) {
-          status.textContent = "Password belum sesuai.";
-          return;
-        }
-        recordsToProvision = LOGIN_USERS.every(([member]) => auth[member]) ? auth : { abi: auth.abi };
-      } else {
-        recordsToProvision = { abi: await createPasswordRecord(password) };
-      }
-      const bootstrapKey = prompt("Kode aktivasi satu kali dari Script Properties Apps Script:");
-      if (!bootstrapKey) {
-        status.textContent = "Aktivasi awal memerlukan kode satu kali dari pengelola Apps Script.";
-        return;
-      }
-      const provision = await sendAuthRequest({ action: "authProvision", users: recordsToProvision, bootstrapKey });
-      if (provision.created) {
-        saveCloudSession(provision);
-        localStorage.setItem(sessionKey, user);
-        unlockApp(user);
-        return;
-      }
-      if (provision.exists) {
-        const retry = await sendAuthRequest({ action: "authLogin", user, password });
-        if (retry.ok) {
-          saveCloudSession(retry);
-          localStorage.setItem(sessionKey, user);
-          unlockApp(user);
-          return;
-        }
-        status.textContent = retry.error || "Password belum sesuai.";
-        return;
-      }
-    }
-    status.textContent = cloud.error || "Password keluarga belum tersedia di server.";
-  } catch (error) {
-    status.textContent = error?.message || "Server login tidak merespons. Coba lagi sebentar.";
-  }
+  if (form.dataset.submitting === "true" || !password.value) return;
+  form.dataset.submitting = "true";
+  status.textContent = "Menghubungkan dengan aman ke server keluarga...";
+  const setHidden = (name, value) => {
+    let field = form.querySelector(`input[name="${name}"]`);
+    if (!field) { field = document.createElement("input"); field.type = "hidden"; field.name = name; form.append(field); }
+    field.value = value;
+  };
+  setHidden("action", "authLoginForm");
+  document.getElementById("loginUser").name = "user";
+  password.name = "password";
+  form.method = "post";
+  form.action = config.googleAppsScriptUrl;
+  form.target = "_top";
+  form.submit();
 }
 
-async function sendAuthRequest(payload) {
+function consumeLoginRedirect() {
+  const fragment = new URLSearchParams(window.location.hash.slice(1));
+  const token = fragment.get("session");
+  const user = fragment.get("user");
+  if (token && LOGIN_USERS.some(([id]) => id === user)) {
+    localStorage.setItem(cloudSessionKey, token);
+    localStorage.setItem(sessionKey, user);
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    return { user, error: "" };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const result = { user: params.get("loginUser") || "", error: params.get("loginError") || "" };
+  if (result.error) history.replaceState(null, "", window.location.pathname);
+  return result;
+}
+
+function sendAuthRequest(payload) {
   return sendCloudRequest(payload);
 }
 
