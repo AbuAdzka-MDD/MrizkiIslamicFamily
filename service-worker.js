@@ -5,7 +5,7 @@ const ASSETS = [
   "./styles.css",
   "./config.js",
   "./assets/logo/abu-adzka-logo.png",
-  "./src/app.js",
+  "./src/app.js?v=auth-polling-cache-bust-2",
   "./src/logic.mjs",
   "./manifest.webmanifest"
 ];
