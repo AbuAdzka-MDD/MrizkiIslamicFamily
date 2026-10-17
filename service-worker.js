@@ -1,4 +1,4 @@
-const CACHE_NAME = "family-rizki-pwa-v26-direct-login";
+const CACHE_NAME = "family-rizki-pwa-v27-clean-profile";
 const ASSETS = [
   "./",
   "./index.html",
