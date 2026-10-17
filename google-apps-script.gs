@@ -44,6 +44,7 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  if (e && e.parameter && ['profilePhotoSaveForm', 'profilePhotoLoadForm'].includes(e.parameter.action)) return profilePhotoForm_(e.parameter);
   if (e && e.parameter && e.parameter.action === 'authLoginForm') return authLoginForm_(e.parameter);
   let requestId = String(e && e.parameter && e.parameter.requestId || '');
   try {
@@ -143,13 +144,48 @@ function authLoginForm_(params) {
   const password = String(params.password || '');
   const allowed = ['abi', 'ummi', 'alif_aslam', 'muslim_ihsan', 'm_bilal_albana', 'fajri_rahman', 'adzkadina_salsabila'];
   const result = allowed.includes(user) ? authLogin_({ user: user, password: password }) : { ok: false, error: 'Pengguna tidak valid.' };
+  if (result.ok) {
+    const photo = profilePhotoGet_({ user: user, sessionToken: result.sessionToken });
+    if (photo.ok) result.photoData = photo.photoData;
+    else result.photoError = photo.error;
+  }
+  return appReturnPage_(result, user, 'login');
+}
+
+function profilePhotoForm_(params) {
+  const user = String(params.user || '');
+  const token = String(params.sessionToken || '');
+  if (verifySessionToken_(token) !== user || !user) return appReturnPage_({ ok: false, error: 'Sesi sudah tidak berlaku. Silakan login kembali.' }, user, 'login');
+  let result;
+  try {
+    const body = { user: user, sessionToken: token, photoData: String(params.photoData || '') };
+    result = params.action === 'profilePhotoSaveForm' ? profilePhotoSet_(body) : profilePhotoGet_(body);
+    if (result.ok && params.action === 'profilePhotoSaveForm') result.photoData = body.photoData;
+  } catch (error) {
+    result = { ok: false, error: 'Foto belum dapat disimpan atau dibaca dari Google Drive. Silakan coba lagi.' };
+  }
+  const response = result.ok
+    ? Object.assign({}, result, { sessionToken: result.sessionToken || token })
+    : { ok: true, sessionToken: token, photoError: result.error || 'Foto belum tersinkron.' };
+  return appReturnPage_(response, user, params.action === 'profilePhotoSaveForm' ? 'photoSaved' : 'photoLoaded');
+}
+
+function appReturnPage_(result, user, mode) {
   const appUrl = 'https://abuadzka-mdd.github.io/MrizkiIslamicFamily/';
-  const target = result.ok ? appUrl + '#session=' + encodeURIComponent(result.sessionToken) + '&user=' + encodeURIComponent(user) : appUrl + '?loginError=' + encodeURIComponent(result.error || 'Login gagal.') + '&loginUser=' + encodeURIComponent(user);
-  const safeTarget = JSON.stringify(target);
-  const title = result.ok ? 'Login berhasil' : 'Login belum berhasil';
+  let target;
+  if (result.ok) {
+    target = appUrl + '#session=' + encodeURIComponent(result.sessionToken) + '&user=' + encodeURIComponent(user) + '&photoMode=' + mode;
+    if (typeof result.photoData === 'string') target += '&photo=' + encodeURIComponent(result.photoData);
+    if (result.photoError) target += '&photoError=' + encodeURIComponent(result.photoError);
+  } else {
+    target = appUrl + '?loginError=' + encodeURIComponent(result.error || 'Login gagal.') + '&loginUser=' + encodeURIComponent(user);
+  }
+  const success = result.ok && !result.photoError;
+  const title = mode === 'login' ? (result.ok ? 'Login berhasil' : 'Login belum berhasil') : (success ? 'Foto profil tersinkron' : 'Foto belum tersinkron');
   const label = result.ok ? 'Lanjutkan ke dashboard' : 'Kembali ke halaman login';
-  const message = result.ok ? 'Sesi terverifikasi. Silakan lanjut ke aplikasi.' : String(result.error || 'Silakan periksa pengguna dan password.');
-  const html = '<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + title + '</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#172d68,#405c9a);font:16px Arial,sans-serif;color:#10245e}.panel{width:min(440px,calc(100% - 40px));box-sizing:border-box;padding:36px;background:#f8f9fc;border-radius:14px;text-align:center;box-shadow:0 20px 50px #09183c66}h1{font-size:25px}p{color:#58657b;line-height:1.55}a{display:block;margin-top:24px;padding:14px 18px;border-radius:8px;background:#183b93;color:#fff;text-decoration:none;font-weight:bold}</style></head><body><main class="panel"><h1>' + title + '</h1><p>' + message + '</p><a target="_blank" rel="noopener" href="' + target + '">' + label + '</a></main>' + '<script>setTimeout(function(){try{window.top.location.replace(' + safeTarget + ')}catch(e){}},150)</script>' + '</body></html>';
+  const message = result.ok ? (result.photoError || (mode === 'login' ? 'Akun terverifikasi. Lanjutkan untuk membuka dashboard.' : 'Lanjutkan untuk menampilkan foto profil di dashboard.')) : String(result.error || 'Silakan periksa pengguna dan password.');
+  const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  const html = '<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + escape(title) + '</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#203b76;font:16px Arial,sans-serif;color:#10245e}.panel{width:min(440px,calc(100% - 40px));box-sizing:border-box;padding:32px;background:#f8f9fc;border-radius:8px;text-align:center}h1{font-size:25px}p{color:#58657b;line-height:1.55}a{display:block;margin-top:24px;padding:14px;border-radius:8px;background:#183b93;color:#fff;text-decoration:none;font-weight:bold}</style></head><body><main class="panel"><h1>' + escape(title) + '</h1><p>' + escape(message) + '</p><a target="_blank" rel="noopener noreferrer" href="' + escape(target) + '">' + label + '</a></main></body></html>';
   return HtmlService.createHtmlOutput(html).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
