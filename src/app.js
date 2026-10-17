@@ -374,7 +374,6 @@ async function handleLogin(event) {
 }
 
 async function sendAuthRequest(payload) {
-  if (payload.action === "authLogin") return sendLoginBridge(payload);
   return sendCloudRequest(payload);
 }
 
