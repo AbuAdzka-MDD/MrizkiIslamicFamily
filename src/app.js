@@ -395,22 +395,43 @@ async function sendCloudRequest(payload) {
 function pollAuthResult(requestId) {
   return new Promise((resolve, reject) => {
     const callback = `authCallback_${requestId.replace(/-/g, "")}`;
-    let attempts = 0;
+    const deadline = Date.now() + 30000;
+    let activeScript;
+    let attemptTimer;
+    const finish = (error, result) => {
+      clearTimeout(attemptTimer);
+      activeScript?.remove();
+      delete window[callback];
+      if (error) reject(error);
+      else resolve(result);
+    };
     const check = () => {
-      if (attempts++ >= 20) {
-        delete window[callback];
-        reject(new Error("Server login tidak merespons. Coba lagi sebentar."));
+      if (Date.now() >= deadline) {
+        finish(new Error("Server login terlalu lama merespons. Muat ulang halaman dan coba lagi."));
         return;
       }
       const script = document.createElement("script");
+      activeScript = script;
+      let settled = false;
+      const retry = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(attemptTimer);
+        script.remove();
+        attemptTimer = setTimeout(check, 700);
+      };
       script.src = `${config.googleAppsScriptUrl}?action=authResult&requestId=${encodeURIComponent(requestId)}&callback=${callback}&t=${Date.now()}`;
-      script.onerror = () => { script.remove(); setTimeout(check, 500); };
+      script.onerror = retry;
       script.onload = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(attemptTimer);
         script.remove();
         const result = window[callback]?.result;
-        if (result && !result.pending) { delete window[callback]; resolve(result); }
-        else setTimeout(check, 500);
+        if (result && !result.pending) finish(null, result);
+        else attemptTimer = setTimeout(check, 700);
       };
+      attemptTimer = setTimeout(retry, 5000);
       document.head.append(script);
     };
     window[callback] = result => { window[callback].result = result; window[callback].pending = Boolean(result.pending); };
