@@ -278,14 +278,16 @@ function initAuth() {
   document.getElementById("togglePasswordBtn")?.addEventListener("click", togglePasswordVisibility);
   document.getElementById("logoutBtn").addEventListener("click", logout);
   document.getElementById("profilePhotoInput")?.addEventListener("change", handleProfilePhoto);
-  window.addEventListener("online", () => {
-    const user = localStorage.getItem(sessionKey);
-    if (user) loadCloudProfilePhoto(user);
-  });
+  document.getElementById("refreshProfilePhotoBtn")?.addEventListener("click", refreshProfilePhoto);
 
   const session = localStorage.getItem(sessionKey);
   if (LOGIN_USERS.some(([user]) => user === session)) unlockApp(session);
   else document.getElementById("loginForm").hidden = false;
+  const photoNotice = sessionStorage.getItem("profilePhotoNotice");
+  if (photoNotice) {
+    document.getElementById("profilePhotoStatus").textContent = photoNotice;
+    sessionStorage.removeItem("profilePhotoNotice");
+  }
 }
 
 async function handlePasswordSetup(event) {
@@ -348,6 +350,18 @@ function consumeLoginRedirect() {
   if (token && LOGIN_USERS.some(([id]) => id === user)) {
     localStorage.setItem(cloudSessionKey, token);
     localStorage.setItem(sessionKey, user);
+    const photo = fragment.get("photo");
+    const photoMode = fragment.get("photoMode");
+    if (photo && /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(photo) && photo.length <= 70000 && (photoMode === "photoSaved" || !loadProfilePhotoPending()[user])) {
+      const photos = loadProfilePhotos();
+      photos[user] = photo;
+      localStorage.setItem(profilePhotoKey, JSON.stringify(photos));
+      if (photoMode === "photoSaved") setProfilePhotoPending(user, false);
+    }
+    const photoError = fragment.get("photoError");
+    if (photoError) sessionStorage.setItem("profilePhotoNotice", photoError);
+    else if (photoMode === "photoSaved") sessionStorage.setItem("profilePhotoNotice", "Foto tersimpan dan tersinkron");
+    else if (photoMode === "photoLoaded") sessionStorage.setItem("profilePhotoNotice", photo ? "Foto tersinkron" : "Belum ada foto di server. Pilih Ubah foto untuk mengunggah.");
     history.replaceState(null, "", window.location.pathname + window.location.search);
     return { user, error: "" };
   }
@@ -478,7 +492,8 @@ function unlockApp(user) {
   roleSelect.disabled = true;
   restrictStateForUser(user);
   updateDashboardProfile(user);
-  loadCloudProfilePhoto(user);
+  const photoStatus = document.getElementById("profilePhotoStatus");
+  if (photoStatus) photoStatus.textContent = loadProfilePhotoPending()[user] ? "Foto tersimpan di perangkat; pilih kembali untuk mengirim." : "Ubah foto";
   renderNav(user);
   if (!canAccess(user, "all") && ["reports", "settings"].some(id => document.getElementById(id).classList.contains("active"))) {
     showView("dashboard");
@@ -495,40 +510,6 @@ function saveCloudSession(result) {
   if (result.sessionToken) localStorage.setItem(cloudSessionKey, result.sessionToken);
 }
 
-async function loadCloudProfilePhoto(user) {
-  const token = localStorage.getItem(cloudSessionKey);
-  if (!token) return;
-  const localPhoto = loadProfilePhotos()[user];
-  const status = document.getElementById("profilePhotoStatus");
-  try {
-    if (loadProfilePhotoPending()[user] && localPhoto) {
-      await uploadProfilePhoto(user, localPhoto);
-      return;
-    }
-    const result = await sendAuthRequest({ action: "profilePhotoGet", user, sessionToken: token });
-    if (!result.ok) throw new Error(result.error || "Foto profil belum dapat dimuat.");
-    // Ignore an older cloud read when a new photo was selected meanwhile.
-    if (loadProfilePhotos()[user] !== localPhoto || loadProfilePhotoPending()[user]) return;
-    if (result.photoData) {
-      const photos = loadProfilePhotos();
-      photos[user] = result.photoData;
-      localStorage.setItem(profilePhotoKey, JSON.stringify(photos));
-      if (localStorage.getItem(sessionKey) === user) updateDashboardProfile(user);
-      if (status && localStorage.getItem(sessionKey) === user) status.textContent = "Foto tersinkron";
-    } else if (localPhoto) {
-      const photoData = await encodeProfilePhoto(localPhoto);
-      if (loadProfilePhotos()[user] !== localPhoto || loadProfilePhotoPending()[user]) return;
-      const photos = loadProfilePhotos();
-      photos[user] = photoData;
-      localStorage.setItem(profilePhotoKey, JSON.stringify(photos));
-      setProfilePhotoPending(user, true);
-      await uploadProfilePhoto(user, photoData);
-    }
-  } catch (error) {
-    if (status && localStorage.getItem(sessionKey) === user) status.textContent = `Foto belum tersinkron: ${error.message}`;
-  }
-}
-
 function loadProfilePhotoPending() {
   try { return JSON.parse(localStorage.getItem(profilePhotoPendingKey) || "{}"); }
   catch { return {}; }
@@ -541,16 +522,34 @@ function setProfilePhotoPending(user, pending) {
   localStorage.setItem(profilePhotoPendingKey, JSON.stringify(users));
 }
 
-async function uploadProfilePhoto(user, photoData) {
+function submitProfilePhotoForm(action, user, photoData = "") {
   const token = localStorage.getItem(cloudSessionKey);
-  if (!token) throw new Error("Login kembali untuk menyinkronkan foto.");
-  const result = await sendAuthRequest({ action: "profilePhotoSet", user, sessionToken: token, photoData });
-  if (!result.ok) throw new Error(result.error || "Sinkronisasi foto gagal.");
-  if (loadProfilePhotos()[user] === photoData) setProfilePhotoPending(user, false);
-  if (localStorage.getItem(sessionKey) === user) {
-    updateDashboardProfile(user);
-    const status = document.getElementById("profilePhotoStatus");
-    if (status) status.textContent = "Foto tersimpan dan tersinkron";
+  if (!token || !config.googleAppsScriptUrl) throw new Error("Login kembali untuk menyinkronkan foto.");
+  const form = document.createElement("form");
+  form.method = "post";
+  form.action = config.googleAppsScriptUrl;
+  form.target = "_top";
+  form.hidden = true;
+  for (const [name, value] of Object.entries({ action, user, sessionToken: token, photoData })) {
+    const field = document.createElement("input");
+    field.type = "hidden";
+    field.name = name;
+    field.value = value;
+    form.append(field);
+  }
+  document.body.append(form);
+  form.submit();
+}
+
+function refreshProfilePhoto() {
+  const user = localStorage.getItem(sessionKey);
+  if (!user) return;
+  const status = document.getElementById("profilePhotoStatus");
+  try {
+    if (status) status.textContent = "Mengambil foto dari server...";
+    submitProfilePhotoForm("profilePhotoLoadForm", user);
+  } catch (error) {
+    if (status) status.textContent = error.message;
   }
 }
 
@@ -596,7 +595,8 @@ async function handleProfilePhoto(event) {
     setProfilePhotoPending(user, true);
     savedOnDevice = true;
     if (localStorage.getItem(sessionKey) === user) updateDashboardProfile(user);
-    await uploadProfilePhoto(user, photoData);
+    if (status) status.textContent = "Mengirim foto ke server...";
+    submitProfilePhotoForm("profilePhotoSaveForm", user, photoData);
   } catch (error) {
     if (status) status.textContent = savedOnDevice
       ? `Foto tersimpan di perangkat; sinkronisasi belum selesai: ${error.message}`
