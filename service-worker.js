@@ -1,12 +1,13 @@
-const CACHE_NAME = "family-rizki-pwa-v25-photo-native";
+const CACHE_NAME = "family-rizki-pwa-v26-direct-login";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./config.js",
   "./assets/logo/abu-adzka-logo.png",
-  "./src/app.js?v=profile-photo-native-5",
+  "./src/app.js?v=inline-family-login-6",
   "./src/logic.mjs",
+  "./src/cloud-client.mjs",
   "./manifest.webmanifest"
 ];
 
