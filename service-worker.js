@@ -1,4 +1,4 @@
-const CACHE_NAME = "family-rizki-pwa-v21-auth-bridge";
+const CACHE_NAME = "family-rizki-pwa-v22-auth-cache-bust";
 const ASSETS = [
   "./",
   "./index.html",
