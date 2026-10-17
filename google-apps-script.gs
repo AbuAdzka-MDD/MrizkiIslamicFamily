@@ -44,6 +44,7 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  if (e && e.parameter && e.parameter.action === 'authLoginForm') return authLoginForm_(e.parameter);
   let requestId = String(e && e.parameter && e.parameter.requestId || '');
   try {
     const body = JSON.parse(e.postData.contents || '{}');
@@ -135,6 +136,21 @@ function createFamilyBootstrapKey() {
   }
   Logger.log('Kode aktivasi satu kali: ' + key);
   return key;
+}
+
+function authLoginForm_(params) {
+  const user = String(params.user || '');
+  const password = String(params.password || '');
+  const allowed = ['abi', 'ummi', 'alif_aslam', 'muslim_ihsan', 'm_bilal_albana', 'fajri_rahman', 'adzkadina_salsabila'];
+  const result = allowed.includes(user) ? authLogin_({ user: user, password: password }) : { ok: false, error: 'Pengguna tidak valid.' };
+  const appUrl = 'https://abuadzka-mdd.github.io/MrizkiIslamicFamily/';
+  const target = result.ok ? appUrl + '#session=' + encodeURIComponent(result.sessionToken) + '&user=' + encodeURIComponent(user) : appUrl + '?loginError=' + encodeURIComponent(result.error || 'Login gagal.') + '&loginUser=' + encodeURIComponent(user);
+  const safeTarget = JSON.stringify(target);
+  const title = result.ok ? 'Login berhasil' : 'Login belum berhasil';
+  const label = result.ok ? 'Lanjutkan ke dashboard' : 'Kembali ke halaman login';
+  const message = result.ok ? 'Sesi terverifikasi. Silakan lanjut ke aplikasi.' : String(result.error || 'Silakan periksa pengguna dan password.');
+  const html = '<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + title + '</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#172d68,#405c9a);font:16px Arial,sans-serif;color:#10245e}.panel{width:min(440px,calc(100% - 40px));box-sizing:border-box;padding:36px;background:#f8f9fc;border-radius:14px;text-align:center;box-shadow:0 20px 50px #09183c66}h1{font-size:25px}p{color:#58657b;line-height:1.55}a{display:block;margin-top:24px;padding:14px 18px;border-radius:8px;background:#183b93;color:#fff;text-decoration:none;font-weight:bold}</style></head><body><main class="panel"><h1>' + title + '</h1><p>' + message + '</p><a href="' + target + '">' + label + '</a></main>' + (result.ok ? '<script>setTimeout(function(){try{window.top.location.replace(' + safeTarget + ')}catch(e){}},250)</script>' : '') + '</body></html>';
+  return HtmlService.createHtmlOutput(html).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 function authLogin_(body) {
