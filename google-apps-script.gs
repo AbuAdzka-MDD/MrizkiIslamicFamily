@@ -32,6 +32,7 @@ const SCHEMA = {
 
 function doGet(e) {
   const action = e && e.parameter && e.parameter.action;
+  if (action === 'authFrame') return authFramePage_();
   if (action === 'authResult') return authResult_(e.parameter);
   const ss = getSpreadsheet_();
   const payload = { ok: true, appName: APP_NAME, spreadsheetId: ss.getId(), summary: buildSummary_(ss) };
@@ -328,6 +329,30 @@ function verifyPassword_(record, password) {
 function hashPassword_(salt, password) {
   const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + ':' + password, Utilities.Charset.UTF_8);
   return digest.map(byte => ('0' + ((byte + 256) % 256).toString(16)).slice(-2)).join('');
+}
+
+
+function authFramePage_() {
+  const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><script>
+    window.addEventListener('message', function(event) {
+      if (event.origin !== 'https://abuadzka-mdd.github.io' || event.data?.type !== 'family-auth-request') return;
+      var requestId = String(event.data.requestId || '');
+      google.script.run
+        .withSuccessHandler(function(result) {
+          parent.postMessage({ type: 'family-auth-response', requestId: requestId, result: result }, event.origin);
+        })
+        .withFailureHandler(function(error) {
+          parent.postMessage({ type: 'family-auth-response', requestId: requestId, error: error.message || 'Autentikasi gagal.' }, event.origin);
+        })
+        .authBridgeLogin_(event.data.payload || {});
+    });
+  </script></body></html>`;
+  return HtmlService.createHtmlOutput(html).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function authBridgeLogin_(payload) {
+  if (payload.action !== 'authLogin') return { ok: false, error: 'Permintaan autentikasi tidak valid.' };
+  return authLogin_(payload);
 }
 
 function authResult_(params) {
