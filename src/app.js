@@ -15,6 +15,7 @@ const queueKey = `${config.familyId}:offlineQueue:v3`;
 const authKey = `${config.familyId}:auth:v1`;
 const sessionKey = `${config.familyId}:session:v1`;
 const profilePhotoKey = `${config.familyId}:profilePhotos:v1`;
+const profilePhotoPendingKey = `${profilePhotoKey}:pending`;
 const cloudSessionKey = `${config.familyId}:cloudSession:v1`;
 const accessKey = `${config.familyId}:access:v1`;
 const quranCacheKey = `${config.familyId}:quranCache:v2`;
@@ -277,6 +278,10 @@ function initAuth() {
   document.getElementById("togglePasswordBtn")?.addEventListener("click", togglePasswordVisibility);
   document.getElementById("logoutBtn").addEventListener("click", logout);
   document.getElementById("profilePhotoInput")?.addEventListener("change", handleProfilePhoto);
+  window.addEventListener("online", () => {
+    const user = localStorage.getItem(sessionKey);
+    if (user) loadCloudProfilePhoto(user);
+  });
 
   const session = localStorage.getItem(sessionKey);
   if (LOGIN_USERS.some(([user]) => user === session)) unlockApp(session);
@@ -492,21 +497,61 @@ function saveCloudSession(result) {
 
 async function loadCloudProfilePhoto(user) {
   const token = localStorage.getItem(cloudSessionKey);
-  if (!token || !navigator.onLine) return;
+  if (!token) return;
+  const localPhoto = loadProfilePhotos()[user];
+  const status = document.getElementById("profilePhotoStatus");
   try {
+    if (loadProfilePhotoPending()[user] && localPhoto) {
+      await uploadProfilePhoto(user, localPhoto);
+      return;
+    }
     const result = await sendAuthRequest({ action: "profilePhotoGet", user, sessionToken: token });
-    if (!result.ok) return;
+    if (!result.ok) throw new Error(result.error || "Foto profil belum dapat dimuat.");
+    // Ignore an older cloud read when a new photo was selected meanwhile.
+    if (loadProfilePhotos()[user] !== localPhoto || loadProfilePhotoPending()[user]) return;
     if (result.photoData) {
       const photos = loadProfilePhotos();
       photos[user] = result.photoData;
       localStorage.setItem(profilePhotoKey, JSON.stringify(photos));
-      const image = document.getElementById("dashboardProfilePhoto");
-      if (image && localStorage.getItem(sessionKey) === user) image.src = result.photoData;
-    } else {
-      const localPhoto = loadProfilePhotos()[user];
-      if (localPhoto) await sendAuthRequest({ action: "profilePhotoSet", user, sessionToken: token, photoData: localPhoto });
+      if (localStorage.getItem(sessionKey) === user) updateDashboardProfile(user);
+      if (status && localStorage.getItem(sessionKey) === user) status.textContent = "Foto tersinkron";
+    } else if (localPhoto) {
+      const photoData = await encodeProfilePhoto(localPhoto);
+      if (loadProfilePhotos()[user] !== localPhoto || loadProfilePhotoPending()[user]) return;
+      const photos = loadProfilePhotos();
+      photos[user] = photoData;
+      localStorage.setItem(profilePhotoKey, JSON.stringify(photos));
+      setProfilePhotoPending(user, true);
+      await uploadProfilePhoto(user, photoData);
     }
-  } catch { /* Keep the locally saved photo available while the cloud is offline. */ }
+  } catch (error) {
+    if (status && localStorage.getItem(sessionKey) === user) status.textContent = `Foto belum tersinkron: ${error.message}`;
+  }
+}
+
+function loadProfilePhotoPending() {
+  try { return JSON.parse(localStorage.getItem(profilePhotoPendingKey) || "{}"); }
+  catch { return {}; }
+}
+
+function setProfilePhotoPending(user, pending) {
+  const users = loadProfilePhotoPending();
+  if (pending) users[user] = true;
+  else delete users[user];
+  localStorage.setItem(profilePhotoPendingKey, JSON.stringify(users));
+}
+
+async function uploadProfilePhoto(user, photoData) {
+  const token = localStorage.getItem(cloudSessionKey);
+  if (!token) throw new Error("Login kembali untuk menyinkronkan foto.");
+  const result = await sendAuthRequest({ action: "profilePhotoSet", user, sessionToken: token, photoData });
+  if (!result.ok) throw new Error(result.error || "Sinkronisasi foto gagal.");
+  if (loadProfilePhotos()[user] === photoData) setProfilePhotoPending(user, false);
+  if (localStorage.getItem(sessionKey) === user) {
+    updateDashboardProfile(user);
+    const status = document.getElementById("profilePhotoStatus");
+    if (status) status.textContent = "Foto tersimpan dan tersinkron";
+  }
 }
 
 function updateDashboardProfile(user) {
@@ -539,37 +584,54 @@ async function handleProfilePhoto(event) {
   const file = input.files?.[0];
   const user = localStorage.getItem(sessionKey);
   if (!file || !user || !file.type.startsWith("image/")) return;
-  const image = document.getElementById("dashboardProfilePhoto");
   const status = document.getElementById("profilePhotoStatus");
   const previewUrl = URL.createObjectURL(file);
-  if (image) image.src = previewUrl;
   let savedOnDevice = false;
   try {
-    const decodedImage = new Image();
-    await new Promise((resolve, reject) => {
-      decodedImage.onload = resolve;
-      decodedImage.onerror = reject;
-      decodedImage.src = previewUrl;
-    });
-    const canvas = document.createElement("canvas");
-    const scale = Math.min(1, 384 / Math.max(decodedImage.width, decodedImage.height));
-    canvas.width = Math.round(decodedImage.width * scale);
-    canvas.height = Math.round(decodedImage.height * scale);
-    canvas.getContext("2d").drawImage(decodedImage, 0, 0, canvas.width, canvas.height);
+    if (status) status.textContent = "Menyimpan foto...";
+    const photoData = await encodeProfilePhoto(previewUrl);
     const photos = loadProfilePhotos();
-    photos[user] = canvas.toDataURL("image/jpeg", 0.72);
+    photos[user] = photoData;
     localStorage.setItem(profilePhotoKey, JSON.stringify(photos));
+    setProfilePhotoPending(user, true);
     savedOnDevice = true;
-    const token = localStorage.getItem(cloudSessionKey);
-    if (token && navigator.onLine) {
-      const result = await sendAuthRequest({ action: "profilePhotoSet", user, sessionToken: token, photoData: photos[user] });
-      if (!result.ok) throw new Error(result.error || "Sinkronisasi foto gagal.");
-      if (status) status.textContent = "Foto tersimpan dan tersinkron";
-    } else if (status) status.textContent = "Foto tersimpan di perangkat ini; login ulang untuk sinkronisasi.";
-  } catch {
-    if (status) status.textContent = savedOnDevice ? "Foto tersimpan di perangkat, tetapi gagal disinkronkan." : "Foto gagal disimpan. Coba JPG, PNG, atau WebP yang lebih kecil.";
+    if (localStorage.getItem(sessionKey) === user) updateDashboardProfile(user);
+    await uploadProfilePhoto(user, photoData);
+  } catch (error) {
+    if (status) status.textContent = savedOnDevice
+      ? `Foto tersimpan di perangkat; sinkronisasi belum selesai: ${error.message}`
+      : "Foto gagal disimpan. Coba JPG, PNG, atau WebP lain.";
+  } finally {
+    URL.revokeObjectURL(previewUrl);
+    input.value = "";
   }
-  input.value = "";
+}
+
+async function encodeProfilePhoto(source) {
+  const image = new Image();
+  await new Promise((resolve, reject) => {
+    image.onload = resolve;
+    image.onerror = () => reject(new Error("Foto tidak dapat dibaca."));
+    image.src = source;
+  });
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context || !image.width || !image.height) throw new Error("Foto tidak dapat diproses.");
+  let longestSide = Math.max(64, Math.min(384, Math.max(image.width, image.height)));
+  while (longestSide >= 64) {
+    const scale = longestSide / Math.max(image.width, image.height);
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    for (const quality of [0.78, 0.64, 0.5]) {
+      const photoData = canvas.toDataURL("image/jpeg", quality);
+      if (photoData.startsWith("data:image/jpeg;base64,") && photoData.length <= 65000) return photoData;
+    }
+    longestSide = Math.floor(longestSide * 0.75);
+  }
+  throw new Error("Foto terlalu besar untuk disinkronkan.");
 }
 
 function loadProfilePhotos() {
