@@ -1,11 +1,11 @@
-const CACHE_NAME = "family-rizki-pwa-v22-auth-cache-bust";
+const CACHE_NAME = "family-rizki-pwa-v23-form-login";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./config.js",
   "./assets/logo/abu-adzka-logo.png",
-  "./src/app.js?v=auth-polling-cache-bust-2",
+  "./src/app.js?v=apps-script-form-login-3",
   "./src/logic.mjs",
   "./manifest.webmanifest"
 ];
