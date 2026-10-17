@@ -257,7 +257,11 @@ function init() {
   setInterval(() => { if (navigator.onLine && localStorage.getItem(sessionKey)) syncFamilyData(); }, 180000);
   window.addEventListener("resize", drawCharts);
   renderAll();
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" })
+      .then(registration => registration.update())
+      .catch(() => {});
+  }
   window.addEventListener("beforeinstallprompt", event => { event.preventDefault(); deferredInstall = event; });
   window.addEventListener("online", syncQueue);
 }
