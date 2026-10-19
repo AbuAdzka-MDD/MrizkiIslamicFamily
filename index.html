@@ -1,236 +1,230 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Cache-Control" content="no-store, max-age=0">
-  <title>The Family of Muhammad Rizki | Islamic Family Growth Dashboard</title>
-  <link rel="manifest" href="manifest.webmanifest">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ABU ADZKA Dashboard Custom</title>
+  <meta name="theme-color" content="#07111f">
+  <meta name="description" content="ABU ADZKA dashboard custom untuk absensi, inventaris, stock barang, dan laporan keuangan.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ABU ADZKA">
+  
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=sholat-1">
-  <script src="config.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="executive.css">
+<link rel="manifest" href="manifest.webmanifest">
 </head>
-<body class="auth-locked">
-  <section class="login-screen" id="loginScreen">
-    <div class="login-card">
-      <img class="login-logo" src="assets/logo/abu-adzka-logo.png" alt="Abu Adzka logo">
-      <p class="kicker">The Family of Muhammad Rizki</p>
-      <h1>Islamic Family Growth Dashboard</h1>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
 
-      <form id="loginForm" class="login-form">
-        <label>Pengguna
-          <select id="loginUser">
-            <option value="abi">Kepala Keluarga (Abi)</option>
-            <option value="ummi">Istri (Ummi)</option>
-            <option value="alif_aslam">Alif Aslam (Anak Pertama)</option>
-            <option value="muslim_ihsan">Muslim Ihsan (Anak Kedua)</option>
-            <option value="m_bilal_albana">M. Bilal Albana (Anak Ketiga)</option>
-            <option value="fajri_rahman">Fajri Rahman (Anak Keempat)</option>
-            <option value="adzkadina_salsabila">Adzkadina Salsabila (Anak Kelima)</option>
-          </select>
-        </label>
-        <label>Password
-          <span class="password-field">
-            <input id="loginPassword" type="password" autocomplete="current-password" required>
-            <button class="password-toggle" id="togglePasswordBtn" type="button" aria-label="Tampilkan password" title="Tampilkan password">Lihat</button>
-          </span>
-        </label>
-        <button class="btn primary" type="submit">Masuk Dashboard</button>
-        <p class="status-line" id="loginStatus"></p>
-      </form>
-    </div>
-  </section>
-
-  <button class="mobile-menu-toggle" id="mobileMenuToggle" type="button" aria-label="Buka menu" aria-expanded="false">☰</button>
-  <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
-
-  <div class="shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-icon" aria-hidden="true"><img src="assets/logo/abu-adzka-logo.png" alt=""></div>
-        <div><h1>The Family of Muhammad Rizki</h1><p>Islamic Family Growth Dashboard</p></div>
+  <main id="loginScreen" class="login-shell">
+    <section class="login-stage">
+      <div class="login-brand">
+        <img src="assets/abu-adzka-logo.png" alt="Logo Abu Adzka">
+        <div>
+          <span>ABU ADZKA</span>
+          <small>Spesialis Desain Dashboard Custom</small>
+        </div>
       </div>
-      <label class="role-picker">Role aktif
-        <select id="roleSelect">
-          <option value="abi">Kepala Keluarga (Abi)</option>
-          <option value="ummi">Istri (Ummi)</option>
-          <option value="alif_aslam">Alif Aslam (Anak Pertama)</option>
-          <option value="muslim_ihsan">Muslim Ihsan (Anak Kedua)</option>
-          <option value="m_bilal_albana">M. Bilal Albana (Anak Ketiga)</option>
-          <option value="fajri_rahman">Fajri Rahman (Anak Keempat)</option>
-          <option value="adzkadina_salsabila">Adzkadina Salsabila (Anak Kelima)</option>
-        </select>
-      </label>
-      <nav class="nav" id="desktopNav"></nav>
+      <div class="login-visual">
+        <div class="orbital-card card-one">
+          <strong>USAHA</strong>
+          <span>Pencatatan Terpusat</span>
+        </div>
+        <div class="orbital-card card-two">
+          <strong>5</strong>
+          <span>Sub Dashboard</span>
+        </div>
+        <div class="hologram">
+          <img src="assets/abu-adzka-logo.png" alt="">
+        </div>
+      </div>
+    </section>
+
+    <section class="login-panel glass-panel">
+      <div class="panel-head">
+        <span class="status-dot"></span>
+        <span>Secure Access</span>
+      </div>
+      <h2>Masuk Dashboard</h2>
+      <p class="muted">Masuk dengan akun usaha Anda.</p>
+      <div id="googleLogin"><button id="googleLoginBtn" class="primary-btn" type="button">Masuk dengan Google</button><p id="loginError" class="error-text" aria-live="polite"></p><p class="muted">Gunakan email yang didaftarkan Owner. Password Google hanya dimasukkan di halaman resmi Google.</p></div>
+      <div class="password-divider">atau gunakan password ABU ADZKA</div>
+<form id="passwordLoginForm" autocomplete="on">
+<label><span>Email / Username</span><input name="username" type="text" autocomplete="username" maxlength="160" required></label>
+<label><span>Password aplikasi</span><input name="password" type="password" autocomplete="current-password" maxlength="72" required></label>
+<button class="primary-btn" type="submit">Masuk dengan password</button><button type="button" class="table-btn" data-password-toggle>Lihat / sembunyikan password</button>
+<p class="muted">Belum punya password aplikasi? Masuk dengan Google lalu pilih Password saya, atau hubungi Owner.</p>
+</form>
+<p class="muted">Akses usaha dikelola oleh Owner. Pembayaran sah setelah dikonfirmasi server.</p>
+    </section>
+  </main>
+
+  <main id="passwordGate" class="login-shell hidden"><section class="login-panel glass-panel"><h2>Ganti password sementara</h2><p>Owner telah mengatur ulang password aplikasi Anda. Buat password pribadi sebelum melanjutkan.</p><div id="passwordGateBody"></div><button type="button" class="ghost-btn" data-password-signout>Keluar</button></section></main>
+<div id="appShell" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand-lockup">
+        <img src="assets/abu-adzka-logo.png" alt="Logo Abu Adzka">
+        <div>
+          <strong>ABU ADZKA</strong>
+          <span>Dashboard Custom</span>
+        </div>
+      </div>
+      <nav class="nav-list" aria-label="Menu dashboard"><button class="nav-item active" data-view="main"><span class="icon icon-dashboard" aria-hidden="true"></span>Dashboard Utama</button>
+<button class="nav-item " data-view="orders"><span class="icon icon-sales" aria-hidden="true"></span>Transaksi & Pemesanan</button>
+<button class="nav-item" data-view="marketing"><span class="icon" aria-hidden="true"></span>Marketing &amp; Referral</button><button class="nav-item" data-view="crm"><span class="icon" aria-hidden="true"></span>CRM &amp; Leads</button><button class="nav-item " data-view="clients"><span class="icon icon-attendance" aria-hidden="true"></span>Data Base Klien</button>
+<button class="nav-item " data-view="sales"><span class="icon icon-sales" aria-hidden="true"></span>Laporan Penjualan</button>
+<button class="nav-item " data-view="finance"><span class="icon icon-finance" aria-hidden="true"></span>Laporan Keuangan</button>
+<button class="nav-item " data-view="attendance"><span class="icon icon-attendance" aria-hidden="true"></span>Absensi Karyawan</button>
+<button class="nav-item " data-view="inventory"><span class="icon icon-inventory" aria-hidden="true"></span>Daftar Inventaris</button>
+<button class="nav-item " data-view="stock"><span class="icon icon-stock" aria-hidden="true"></span>Stock Barang</button>
+<button class="nav-item " data-view="masters"><span class="icon icon-inventory" aria-hidden="true"></span>Master Dokumen</button>
+<button class="nav-item " data-view="settings"><span class="icon icon-dashboard" aria-hidden="true"></span>Setting</button>
+<button class="nav-item " data-view="history"><span class="icon icon-finance" aria-hidden="true"></span>History Transaksi</button></nav>
+      <div class="profile-card">
+        <img src="assets/abu-adzka-logo.png" alt="">
+        <div>
+          <strong id="profileName">Admin</strong>
+          <span id="profileRole">Administrator</span>
+        </div>
+      </div>
+      <button type="button" class="ghost-btn" data-password-self>Password saya</button>
+<button id="logoutBtn" class="ghost-btn">Keluar</button>
     </aside>
 
-    <main class="main">
-      <div class="topbar">
-        <div>
-          <p class="kicker">Bismillahirrohmaanirrohiim</p>
-          <h1 class="page-title" id="pageTitle">Dashboard Utama</h1>
-          <p class="tagline" id="tagline">Bertumbuh dalam Iman, Ilmu, Kebersamaan, dan Kemandirian.</p>
+    <section class="workspace">
+      <header class="topbar">
+        <button id="menuToggle" class="icon-btn menu-lines" aria-label="Buka menu"><span></span><span></span><span></span></button>
+        <div class="title-block">
+          <p id="roleCaption">Administrator Workspace</p>
+          <h2 id="viewTitle">Dashboard Utama</h2>
         </div>
-        <div class="actions">
-          <button class="btn" id="logoutBtn">Logout</button>
-          <button class="btn primary" id="exportBtn">Export Laporan PDF</button>
+        <div class="top-actions"><div id="liveClock" aria-label="Waktu lokal perangkat"></div><button type="button" id="headerUser" data-photo-self class="header-user" aria-label="Foto dan profil saya"></button>
+          <input id="globalSearch" type="search" placeholder="Cari data, menu, laporan...">
+          <button id="themeToggle" class="icon-btn theme-glyph" aria-label="Ganti tema"><span></span></button>
+          <button id="exportBtn" class="primary-btn small">Ekspor</button>
         </div>
-      </div>
+      </header>
 
-      <section class="view active" id="dashboard">
-        <div class="hero">
-          <div>
-            <img class="hero-logo" src="assets/logo/abu-adzka-logo.png" alt="Abu Adzka logo">
-            <h2>The Family of Muhammad Rizki</h2>
-            <p id="islamicHeader">Memuat salam, tanggal, jadwal sholat, dan ringkasan keluarga...</p>
-          </div>
+      <div id="connectionStatus" role="status" class="connection-status">Menghubungkan ke server…</div><div id="draftNotice"></div><section id="permissionNotice" class="permission-notice hidden"></section>
+
+      <section id="view-main" class="view active"><div id="finance-overview"></div><p class="legacy-label">RINGKASAN OPERASIONAL · Bagan lama tetap tersedia dan dihitung dari catatan tersimpan. Data lama belum otomatis menjadi pembukuan kas.</p>
+        <div class="metric-grid">
+          <article class="metric-card blue">
+            <span>Total Karyawan</span>
+            <strong id="metricEmployees">0</strong>
+            <small>Dari catatan tersimpan</small>
+          </article>
+          <article class="metric-card gold">
+            <span>Total Inventaris</span>
+            <strong id="metricInventory">0</strong>
+            <small>Dari catatan tersimpan</small>
+          </article>
+          <article class="metric-card coral">
+            <span>Total Stock Barang</span>
+            <strong id="metricStock">0</strong>
+            <small>Dari catatan tersimpan</small>
+          </article>
+          <article class="metric-card mint">
+            <span>Selisih Catatan Lama</span>
+            <strong id="metricProfit">Rp 0</strong>
+            <small>Belum direkonsiliasi ke buku kas</small>
+          </article>
         </div>
 
-        <div class="islamic-command-grid">
-          <div class="glass-3d realtime-card">
-            <span class="mini-label">Waktu Real-Time</span>
-            <strong id="realTimeClock">--:--:--</strong>
-            <small id="realTimeDate">Memuat hari dan tanggal</small>
-          </div>
-          <div class="glass-3d prayer-focus">
-            <span class="mini-label">Sholat Berikutnya</span>
-            <strong id="nextPrayerName">-</strong>
-            <small id="nextPrayerCountdown">-</small>
-            <div class="adhan-row">
-              <button class="icon-button" id="adhanBtn" title="Simulasi suara adzan">♪</button>
-              <span>Adzan reminder aktif</span>
+        <div class="dashboard-grid">
+          <article class="panel chart-panel">
+            <div class="section-head">
+              <div>
+                <h3>Ringkasan Aktivitas</h3>
+                <p>Performa operasional 7 hari terakhir</p>
+              </div>
+              <select>
+                <option>7 Hari Terakhir</option>
+                <option>30 Hari Terakhir</option>
+              </select>
             </div>
-          </div>
-          <div class="glass-3d qibla-card">
-            <span class="mini-label">Arah Kiblat</span>
-            <div class="compass-3d">
-              <span>N</span>
-              <i></i>
-              <b>295°</b>
+            <div class="line-chart">
+              <svg viewBox="0 0 720 260" role="img" aria-label="Grafik aktivitas">
+                <defs>
+                  <linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stop-color="#3c7bff" stop-opacity=".42"/>
+                    <stop offset="100%" stop-color="#3c7bff" stop-opacity="0"/>
+                  </linearGradient>
+                  <filter id="lineGlow" x="-20%" y="-30%" width="140%" height="170%">
+                    <feGaussianBlur stdDeviation="5" result="blur"/>
+                    <feMerge>
+                      <feMergeNode in="blur"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
+                </defs>
+                <path class="grid-line" d="M20 48H700M20 108H700M20 168H700M20 228H700"/>
+                <path class="area" d=""/>
+                <path class="stroke-shadow" d=""/>
+                <path class="stroke" d=""/>
+              </svg>
             </div>
-          </div>
-          <div class="glass-3d quran-card">
-            <span class="mini-label">Al-Qur'an Digital</span>
-            <strong>30 Juz</strong>
-            <small>114 surah, terjemahan Indonesia, tajwid berwarna, bookmark, tilawah, hafalan.</small>
-          </div>
-        </div>
-
-        <div class="smart-art">
-          <div><span>Iman</span><b>Spiritual</b></div>
-          <div><span>Ilmu</span><b>Intelektual</b></div>
-          <div><span>Keluarga</span><b>Kebersamaan</b></div>
-          <div><span>Mandiri</span><b>Keuangan</b></div>
-        </div>
-
-        <div class="grid metrics" id="metricGrid"></div>
-
-        <div class="grid two">
-          <div class="panel">
-            <h3>Grafik Perkembangan 7 Hari</h3>
-            <div class="filters">
-              <label>Anggota<select id="filterMember"></select></label>
-              <label>Periode<select id="filterPeriod"><option>Hari</option><option>Pekan</option><option>Bulan</option><option>Tahun</option></select></label>
-              <label>Kategori<select id="filterCategory"><option>Semua</option><option>Spiritual</option><option>Emosional</option><option>Intelektual</option><option>Daily Activity</option><option>Keuangan</option></select></label>
-              <label>Status<select id="filterStatus"><option>Semua</option><option>Selesai</option><option>Direncanakan</option><option>Ditunda</option></select></label>
-              <label>Pencarian<input id="globalSearch" placeholder="Cari laporan"></label>
+          </article>
+          <article class="panel activity-panel">
+            <div class="section-head">
+              <div>
+                <h3>Aktivitas Terbaru</h3>
+                <p>Update sistem otomatis</p>
+              </div>
             </div>
-            <div class="chart-wrap"><canvas id="progressChart" width="900" height="310"></canvas></div>
-          </div>
-
-          <div class="panel">
-            <h3>Widget Islami</h3>
-            <table>
-              <tbody id="islamicWidget"></tbody>
-            </table>
-          </div>
+            <div id="activityList" class="activity-list"></div>
+          </article>
         </div>
 
-        <div class="grid two" style="margin-top:16px">
-          <div class="panel">
-            <h3>Keuangan Keluarga</h3>
-            <div class="chart-wrap"><canvas id="financeChart" width="900" height="310"></canvas></div>
-          </div>
-          <div class="panel">
-            <h3>Aktivitas Terbaru</h3>
-            <ul class="timeline" id="recentActivity"></ul>
-          </div>
+        <div class="mini-grid">
+          <article class="panel radial-panel">
+            <h3>Persentase Kehadiran</h3>
+            <div class="radial" style="--value: 0"><strong>Belum ada data</strong><span>Bulan ini</span></div>
+          </article>
+          <article class="panel low-stock-panel">
+            <h3>Stock Menipis</h3>
+            <div id="lowStockList"></div>
+          </article>
+          <article class="panel donut-panel">
+            <h3>Pengeluaran Bulan Ini</h3>
+            <div class="donut"><strong>Belum ada data</strong><span>Total</span></div>
+          </article>
+          <article class="panel histogram-panel">
+            <h3>Performa Mingguan</h3>
+            <div class="histogram-3d" aria-label="Histogram performa mingguan">
+              <span style="--h: 0%; --c: #3168ff"><i>Sen</i></span>
+              <span style="--h: 0%; --c: #28c8ff"><i>Sel</i></span>
+              <span style="--h: 0%; --c: #d7a44b"><i>Rab</i></span>
+              <span style="--h: 0%; --c: #28c08b"><i>Kam</i></span>
+              <span style="--h: 0%; --c: #ff6177"><i>Jum</i></span>
+              <span style="--h: 0%; --c: #7b61ff"><i>Sab</i></span>
+            </div>
+          </article>
         </div>
       </section>
 
-      <section class="view" id="members"></section>
-      <section class="view" id="growth"></section>
-      <section class="view" id="daily"></section>
-      <section class="view" id="finance"></section>
-      <section class="view" id="agenda"></section>
-      <section class="view" id="quran"></section>
-      <section class="view" id="prayer"></section>
-      <section class="view" id="reports"></section>
-      <section class="view" id="notifications"></section>
-      <section class="view" id="settings"></section>
-    </main>
+      <section id="view-attendance" class="view"></section>
+      <section id="view-inventory" class="view"></section>
+      <section id="view-stock" class="view"></section>
+      <section id="view-sales" class="view"></section>
+      <section id="view-finance" class="view"></section><section id="view-orders" class="view"></section><section id="view-clients" class="view"></section><section id="view-masters" class="view"></section><section id="view-settings" class="view"></section><section id="view-history" class="view"></section><section id="view-marketing" class="view"></section><section id="view-crm" class="view"></section>
+    </section>
   </div>
 
-  <nav class="mobile-bar" id="mobileNav" hidden></nav>
-
-  <dialog id="pdfDialog">
-    <form method="dialog" class="dialog-body">
-      <h3>Export Laporan PDF</h3>
-      <label>Jenis laporan
-        <select id="pdfType">
-          <option>Laporan seluruh keluarga</option>
-          <option>Laporan per anggota</option>
-          <option>Laporan harian</option>
-          <option>Laporan pekanan</option>
-          <option>Laporan bulanan</option>
-          <option>Laporan tahunan</option>
-          <option>Laporan pengembangan diri</option>
-          <option>Laporan Daily Activity</option>
-          <option>Laporan keuangan</option>
-          <option>Laporan Al-Qur'an</option>
-          <option>Laporan gabungan</option>
-        </select>
-      </label>
-      <label>Periode laporan<input id="pdfPeriod" placeholder="Agustus 2026"></label>
-      <div class="form-actions">
-        <button class="btn" value="cancel">Batal</button>
-        <button class="btn" id="saveDriveBtn" value="drive">Simpan ke Google Drive</button>
-        <button class="btn primary" id="printPdfBtn" value="print">Pratinjau / Simpan PDF</button>
-      </div>
-      <p class="muted">Nama file mengikuti pola The_Family_of_Muhammad_Rizki_[JenisLaporan]_[Periode]_[Tanggal].pdf.</p>
-    </form>
-  </dialog>
-
-  <script>
-    (() => {
-      const replaceSholatText = root => {
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-        const nodes = [];
-        while (walker.nextNode()) nodes.push(walker.currentNode);
-        nodes.forEach(node => {
-          node.nodeValue = node.nodeValue
-            .replace(/\bSalat\b/g, "Sholat")
-            .replace(/\bsalat\b/g, "sholat");
-        });
-      };
-      window.addEventListener("DOMContentLoaded", () => {
-        replaceSholatText(document.body);
-        new MutationObserver(records => {
-          records.forEach(record => record.addedNodes.forEach(node => {
-            if (node.nodeType === Node.TEXT_NODE) {
-              node.nodeValue = node.nodeValue
-                .replace(/\bSalat\b/g, "Sholat")
-                .replace(/\bsalat\b/g, "sholat");
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-              replaceSholatText(node);
-            }
-          }));
-        }).observe(document.body, { childList: true, subtree: true });
-      });
-    })();
-  </script>
-  <script type="module" src="src/app.js?v=cloud-auth-2"></script>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div><dialog id="detailDialog"><button class="table-btn" onclick="this.closest('dialog').close()">Tutup</button><div id="detailBody"></div></dialog>
+  
+  <script src="app.js"></script>
+<script src="config.js"></script>
+<script src="google-transport.js"></script>
+<script src="password-ui.js"></script>
+<script src="workspace.js"></script><script src="executive-model.js"></script><script src="executive.js"></script><script src="rupiah-input.js"></script>
 </body>
 </html>
